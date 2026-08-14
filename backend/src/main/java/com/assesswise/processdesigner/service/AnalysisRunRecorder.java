@@ -72,6 +72,11 @@ public class AnalysisRunRecorder {
 
         AnalysisRun run = runRepository.findById(runId).orElseThrow();
         run.setStatus(AnalysisRunStatus.SUCCEEDED);
+        // Overwrite the provider recorded at start: with a fallback chain, the one that actually
+        // answered may not be the one that was tried first.
+        run.setProvider(completion.provider());
+        run.setModel(completion.model());
+        run.setProviderNotes(joinWarnings(completion.providerNotes()));
         run.setRawResponse(completion.text());
         run.setPromptTokens(completion.promptTokens());
         run.setOutputTokens(completion.outputTokens());

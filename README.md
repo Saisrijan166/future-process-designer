@@ -17,7 +17,7 @@ Current activities  →  Problems  →  AI opportunities  →  Future activities
 | **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind 4 — deployed on Vercel |
 | **Backend** | Spring Boot 3.5 · Java 21 — deployed on Render |
 | **Database** | PostgreSQL 16 — Neon serverless |
-| **AI** | Google Gemini `gemini-3.7-flash` via the free AI Studio API |
+| **AI** | Google Gemini (primary) with automatic failover to Groq — both free tier |
 | **Cost to run** | Nothing. Every service is free-tier or open source — see [LIBRARIES.md](LIBRARIES.md) |
 
 **Live URLs** — fill these in after deploying:
@@ -52,6 +52,10 @@ outputs are generated is a link, not an assertion.
 exact title. Any title that doesn't resolve to a snippet actually retrieved for that run is
 discarded, and the omission is recorded as a warning on the run.
 
+**It survives a provider outage.** Free AI tiers run out — Gemini's allows only a few dozen
+requests a day. When it refuses, the request falls through to Groq automatically, and the result
+page states plainly which service answered and why the first was passed over.
+
 ---
 
 ## Run it locally
@@ -61,8 +65,10 @@ discarded, and the omission is recorded as a warning on the run.
 - **JDK 21** (`java -version`)
 - **Node 20+** (`node -v`)
 - **PostgreSQL 13+** — Docker Compose file included, or point at any instance you have
-- **A free Gemini API key** from <https://aistudio.google.com/apikey> (needed only for `Analyze`;
-  everything else works without one)
+- **At least one free AI API key** (needed only for `Analyze`; everything else works without one):
+  - Gemini — <https://aistudio.google.com/apikey> (primary)
+  - Groq — <https://console.groq.com/keys> (fallback; optional but recommended, since Gemini's free
+    daily allowance is small)
 
 Maven is not required — the repo ships the Maven wrapper.
 
@@ -153,7 +159,7 @@ transaction, so no duplicate or orphaned rows accumulate.
 ## Tests
 
 ```bash
-cd backend && ./mvnw verify        # 84 tests
+cd backend && ./mvnw verify        # 100 tests
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 
@@ -171,7 +177,8 @@ What is covered:
 | The repair retry | A prose response triggers exactly one repair prompt containing the specific complaint, and the second attempt succeeds |
 | Honest failure | Two unusable responses produce a `422`, leave the process untouched, and record a `FAILED` run with the reason |
 | Citation integrity | A fabricated snippet title is discarded, leaves no `ai_opportunity_evidence` row, and is reported as a warning |
-| The Gemini provider | Runs against a real local HTTP server: request shape, response unpacking, 429 retry, non-retryable auth failure, safety block, truncation |
+| Both AI providers | Each runs against a real local HTTP server: request shape, response unpacking, 429 retry, non-retryable auth failure, safety block, truncation |
+| Provider failover | Falls through on quota exhaustion, skips a provider with no key, records who actually answered and why the first was passed over, and fails distinctly when none are configured |
 | Parsing and validation | Markdown fences, prose wrappers, braces and escaped quotes inside strings, enum synonyms, oversized payloads, duplicate items |
 
 The model call itself is scripted in tests, by a stub that lives in `src/test/java` only and is
@@ -209,6 +216,7 @@ DATABASE_USERNAME=...
 DATABASE_PASSWORD=...
 DATABASE_POOL_SIZE=3
 GEMINI_API_KEY=...
+GROQ_API_KEY=...
 APP_CORS_ALLOWED_ORIGINS=https://your-app.vercel.app
 ```
 
@@ -242,21 +250,33 @@ Every knob is an environment variable; nothing needs a code change. Full list wi
 |---|---|---|
 | `DATABASE_URL` / `DATABASE_USERNAME` / `DATABASE_PASSWORD` | local Postgres | Connection |
 | `DATABASE_POOL_SIZE` | `5` | Keep small on Neon's free tier |
-| `GEMINI_API_KEY` | *(empty)* | Required for `/analyze`; absent means a clear 503 |
-| `GEMINI_MODEL` | `gemini-3.7-flash` | Any model your key can reach — see the warning below |
+| `AI_PROVIDER` | `gemini` | The provider tried first |
+| `AI_FALLBACK_PROVIDERS` | `groq` | Tried in order when the primary fails. Empty disables failover |
+| `GEMINI_API_KEY` | *(empty)* | Primary provider. With no key at all, `/analyze` returns a clear 503 |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Any model your key can reach — see the warning below |
 | `GEMINI_STRUCTURED_OUTPUT` | `true` | Server-side response schema. Validation and repair still run either way |
-| `GEMINI_THINKING_BUDGET` | `-1` | `-1` keeps the model default; `0` disables thinking for a faster demo |
+| `GEMINI_THINKING_BUDGET` | `0` | `0` disables thinking, which saves free-tier tokens; `-1` restores the model default |
+| `GROQ_API_KEY` | *(empty)* | Fallback provider |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Completes reliably inside Groq's free per-minute budget |
+| `GROQ_MAX_OUTPUT_TOKENS` | `4096` | Lower than Gemini's on purpose — Groq reserves this against its per-minute budget |
 | `ANALYSIS_SNIPPET_COUNT` | `4` | Grounding snippets injected per analysis |
 | `ANALYSIS_RATE_LIMIT_PER_MINUTE` | `20` | Protects the free AI quota from a double-clicked button |
 | `APP_CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated frontend origins |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | Frontend → backend (frontend build/runtime) |
 
-### A warning about model ids
+### A warning about model ids and free-tier quotas
 
-Free-tier Gemini model availability changes without notice, and **the `models` listing endpoint is
-not a reliable guide to what your key may actually call**. `gemini-2.5-flash` is still listed but
-returns *"no longer available to new users"* for a newly-issued key. `gemini-3.7-flash` is the
-default here because it was verified with a real request on 14-08-2026.
+Two things bite here, and both are configuration rather than code.
+
+**Model availability changes without notice, and the `models` listing endpoint is not a reliable
+guide to what your key may actually call.** `gemini-2.5-flash` is still listed but returns *"no
+longer available to new users"* for a newly-issued key.
+
+**Free-tier quotas are small.** `gemini-3.7-flash` allows roughly 20 requests a day — enough to be
+exhausted during a rehearsal. The default is therefore `gemini-3.1-flash-lite` with thinking
+disabled, which is much cheaper per request, and Groq covers the case where even that runs out.
+Raise `GEMINI_MODEL` to `gemini-3.7-flash` if you want the higher-quality analysis and can spare
+the quota.
 
 If `Analyze` returns a `502` mentioning the model was not found, check what your key can reach and
 set `GEMINI_MODEL` accordingly — no code change, no redeploy of the image:
@@ -289,6 +309,9 @@ at the cost of output changing between runs.
 | `GET` | `/api/roles`, `/api/systems` | Reference lookups |
 | `GET` | `/actuator/health` | Liveness and readiness |
 
+The UI also has a plain-language **How it works** page at `/how-it-works`, written for someone
+meeting the project for the first time.
+
 Errors are RFC 7807 problem documents with actionable messages: `400` validation (with per-field
 detail), `404` not found, `409` an analysis is already running, `422` the model output was unusable
 even after the repair retry, `429` rate limited, `502` the provider failed, `503` no API key
@@ -303,10 +326,12 @@ fail in front of judges, and its results are not reproducible or auditable after
 cited excerpts live in Postgres and are retrieved by keyword match. Every URL is real and was
 checked. The full reasoning, and the honest limitations, are in [docs/sources.md](docs/sources.md).
 
-**One live AI provider behind an interface.** `AiProvider` has a single implementation. The
-interface exists so that a provider swap is a class plus a config value — not because runtime
-failover is implemented. It deliberately is not: the brief asks for that risk to be explained, and
-the time was better spent on the pipeline.
+**Two AI providers, tried in order.** The original design had one provider behind an interface and
+explicitly no failover, on the grounds that the brief asked for the "what if the free tier goes
+away" risk to be *explained* rather than engineered around. That reasoning did not survive contact
+with reality: Gemini's free tier ran out mid-testing at twenty requests, which would end a live
+demo. Groq now backs Gemini up. The `AiProvider` interface is what made this a new class plus a
+config value rather than a rewrite — which was the original point of having it.
 
 **Client-side data fetching.** Server rendering would block on a cold Render instance and time out.
 Fetching in the browser lets the UI say "the backend is waking up".
@@ -336,16 +361,16 @@ backend/                     Spring Boot service
     repository/              Spring Data repositories
     dto/                     Request/response records; dto/ai/ is the model's contract
     service/                 The pipeline — retrieval, prompting, parsing, validation, persistence
-    service/ai/              AiProvider interface + GeminiProvider
+    service/ai/              AiProvider interface, GeminiProvider, GroqProvider, FallbackAiProvider
     controller/              REST endpoints and the RFC 7807 exception handler
     config/                  Typed configuration properties, CORS, OpenAPI
   src/main/resources/
-    db/migration/            Flyway: V1 schema, V2 sample data
+    db/migration/            Flyway: V1 schema, V2 sample data, V3 provider audit column
     prompts/                 Prompt templates — text, not Java
-  src/test/java/             84 tests, integration tests on real PostgreSQL
+  src/test/java/             100 tests, integration tests on real PostgreSQL
 
 frontend/src/
-  app/                       Dashboard, new-process form, detail page, evidence corpus
+  app/                       Dashboard, how-it-works, new-process form, detail page, evidence corpus
   components/                Comparison strip, tab content, run trace panel, UI primitives
   lib/                       Typed API client, formatting, the resource-loading hook
 

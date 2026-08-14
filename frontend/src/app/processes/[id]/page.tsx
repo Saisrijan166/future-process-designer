@@ -13,11 +13,11 @@ import { useApiResource } from "@/lib/use-api-resource";
 
 type TabId = "current" | "transition" | "future" | "evidence";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "current", label: "Current" },
-  { id: "transition", label: "Transition" },
-  { id: "future", label: "Future" },
-  { id: "evidence", label: "Evidence" },
+const TABS: { id: TabId; label: string; hint: string }[] = [
+  { id: "current", label: "Current", hint: "How the process runs today" },
+  { id: "transition", label: "AI ideas", hint: "Where AI could help, and the risks" },
+  { id: "future", label: "Future", hint: "The redesigned process, step by step" },
+  { id: "evidence", label: "Evidence", hint: "The research used to ground the analysis" },
 ];
 
 export default function ProcessDetailPage() {
@@ -123,7 +123,7 @@ export default function ProcessDetailPage() {
               {analysed ? (
                 <Badge tone="success">Analysed</Badge>
               ) : (
-                <Badge tone="neutral">Current state only</Badge>
+                <Badge tone="neutral">Not analysed yet</Badge>
               )}
               {process.origin === "USER" ? <Badge tone="info">Created here</Badge> : null}
             </div>
@@ -139,8 +139,13 @@ export default function ProcessDetailPage() {
           <div className="flex flex-col items-end gap-2">
             <Button onClick={() => void runAnalysis()} disabled={analysing} className="min-w-44">
               {analysing ? <Spinner /> : null}
-              {analysing ? "Analysing…" : analysed ? "Re-run analysis" : "Analyse this process"}
+              {analysing ? "Analysing…" : analysed ? "Run it again" : "Analyse this process"}
             </Button>
+            <p className="max-w-48 text-right text-xs text-ink-400">
+              {analysed
+                ? "Re-running replaces the result. Answers vary slightly each time."
+                : "Generates the AI ideas and the future process. Takes 5–30 seconds."}
+            </p>
             <button
               type="button"
               onClick={() => void handleDelete()}
@@ -161,10 +166,11 @@ export default function ProcessDetailPage() {
         >
           <Spinner className="size-5 text-brand-600" />
           <div>
-            <p className="font-medium">Running the analysis pipeline…</p>
+            <p className="font-medium">Working on it…</p>
             <p className="text-xs text-brand-800">
-              Retrieving grounding sources, prompting the model, validating the response and writing
-              the future state to the database. This usually takes 10–40 seconds.
+              Finding relevant research → asking the AI → checking its answer → saving the result.
+              Usually 5–30 seconds. If the first AI service is busy, the backup takes over
+              automatically.
             </p>
           </div>
         </div>
@@ -193,6 +199,17 @@ export default function ProcessDetailPage() {
           detail={analysisError.reason}
           onRetry={() => void runAnalysis()}
         />
+      ) : null}
+
+      {!analysed && !analysing ? (
+        <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+          <p className="text-sm font-medium text-brand-900">This process has not been analysed yet.</p>
+          <p className="mt-1 text-sm text-brand-900/80">
+            Only the <strong>Current</strong> tab has anything in it so far. Press{" "}
+            <strong>Analyse this process</strong> above to generate the AI ideas and the redesigned
+            future process — they are produced live, not looked up.
+          </p>
+        </div>
       ) : null}
 
       <ComparisonStrip comparison={comparison} />
@@ -235,11 +252,15 @@ export default function ProcessDetailPage() {
           })}
         </div>
 
+        <p className="pt-3 text-xs text-ink-500">
+          {TABS.find((entry) => entry.id === tab)?.hint}
+        </p>
+
         <div
           role="tabpanel"
           id={`panel-${tab}`}
           aria-labelledby={`tab-${tab}`}
-          className="pt-6"
+          className="pt-4"
         >
           {tab === "current" ? (
             <CurrentTab activities={comparison.current.activities} problems={comparison.current.problems} />

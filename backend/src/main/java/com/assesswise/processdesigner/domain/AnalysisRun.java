@@ -67,6 +67,10 @@ public class AnalysisRun {
     @Column(name = "validation_warnings", columnDefinition = "text")
     private String validationWarnings;
 
+    /** One line per provider skipped or failed before this run was served; null if none were. */
+    @Column(name = "provider_notes", columnDefinition = "text")
+    private String providerNotes;
+
     @Column(name = "error_message", columnDefinition = "text")
     private String errorMessage;
 

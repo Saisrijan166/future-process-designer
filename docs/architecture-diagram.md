@@ -27,7 +27,9 @@ flowchart TB
         KRS["KnowledgeRetrievalService<br/>TF-IDF-weighted keyword match"]
         PB["PromptBuilder + PromptTemplateRenderer<br/>templates in resources/prompts/"]
         AP["AiProvider <i>(interface)</i>"]
-        GP["GeminiProvider<br/><i>the one live implementation</i>"]
+        FB["FallbackAiProvider<br/><i>tries each in order</i>"]
+        GP["GeminiProvider<br/><i>primary</i>"]
+        GQ["GroqProvider<br/><i>fallback</i>"]
         PARSE["AnalysisResponseParser<br/>fence stripping · brace matching"]
         VAL["AnalysisPayloadValidator<br/>enum coercion · caps · drops"]
         PERS["AnalysisPersistenceService<br/>FK resolution · idempotent replace"]
@@ -51,8 +53,11 @@ flowchart TB
     AS --> KRS --> KNOW
     AS --> PB
     AS --> AP
-    AP -.->|"the only seam to a model"| GP
-    GP -->|"HTTPS"| GEMINI(["Google AI Studio<br/>gemini-3.7-flash · free tier"])
+    AP -.->|"the only seam to a model"| FB
+    FB --> GP
+    FB -.->|"only if Gemini fails"| GQ
+    GP -->|"HTTPS"| GEMINI(["Google AI Studio<br/>gemini-3.1-flash-lite · free tier"])
+    GQ -->|"HTTPS"| GROQ(["Groq Cloud<br/>llama-3.3-70b · free tier"])
     AS --> PARSE --> VAL --> PERS
     PERS --> CUR & TRANS & FUT
     AS --> AUDIT
@@ -65,9 +70,9 @@ flowchart TB
 
     class DASH,NEW,DETAIL,EVID ui
     class PC,AC,EC,LC,GEH api
-    class AS,KRS,PB,AP,GP,PARSE,VAL,PERS ai
+    class AS,KRS,PB,AP,FB,GP,GQ,PARSE,VAL,PERS ai
     class CUR,TRANS,FUT,KNOW,AUDIT data
-    class GEMINI ext
+    class GEMINI,GROQ ext
 ```
 
 ## The analysis pipeline, step by step
@@ -84,7 +89,7 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant R as KnowledgeRetrievalService
     participant P as PromptBuilder
-    participant G as GeminiProvider
+    participant G as Provider chain<br/>(Gemini → Groq)
     participant V as Parser + Validator
     participant W as AnalysisPersistenceService
 
@@ -100,7 +105,10 @@ sequenceDiagram
     S->>DB: INSERT analysis_run (RUNNING) + retrieved snippets
     S->>G: complete(prompt)
     G->>G: transport retry on 429/5xx
-    G-->>S: raw text + token counts
+    alt primary provider unusable (quota, outage, bad key)
+        G->>G: fall through to the next provider in the chain
+    end
+    G-->>S: raw text + token counts + which provider answered
     S->>V: parse + validate
     alt response unusable
         V-->>S: errors
@@ -124,7 +132,7 @@ sequenceDiagram
 
 | Boundary | Reason |
 |---|---|
-| `AiProvider` interface with one implementation | The model call is the piece most likely to change (pricing, quotas, a better model). Isolating it means a swap is a new class plus a config value. No runtime failover is implemented — that risk only needed explaining, not engineering around. |
+| `AiProvider` interface, with a chain behind it | The model call is the piece most likely to change — pricing, quotas, retirement. Isolating it meant that adding Groq as a fallback, after Gemini's free tier ran out mid-testing, was a new class plus a config value rather than a rewrite. The pipeline is unaware that failover exists. |
 | Retrieval separate from prompting | Retrieval is deterministic and testable on its own; the prompt is text in a resource file. Neither needs the other to change. |
 | Parsing and validation separate from persistence | Nothing untrusted reaches the database. The validator emits a normalised structure, and persistence only ever writes that. |
 | Persistence in its own transactional bean | The model call takes tens of seconds and must not hold a database connection open — a real constraint on a serverless Postgres with a small connection allowance. |
@@ -137,7 +145,8 @@ flowchart LR
     B(["Browser"]) -->|HTTPS| V["Vercel<br/>Next.js static + edge<br/><i>free hobby tier</i>"]
     B -->|"HTTPS · REST"| R["Render<br/>Docker web service<br/><i>free tier, sleeps when idle</i>"]
     R -->|"TLS · JDBC"| N[("Neon<br/>PostgreSQL<br/><i>free serverless tier</i>")]
-    R -->|HTTPS| G(["Google AI Studio<br/><i>free tier</i>"])
+    R -->|HTTPS| G(["Google AI Studio<br/><i>free tier · primary</i>"])
+    R -.->|"HTTPS, on failure"| GQ(["Groq Cloud<br/><i>free tier · fallback</i>"])
 ```
 
 The browser talks to both hosts directly: the frontend fetches client-side rather than

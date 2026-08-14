@@ -13,16 +13,18 @@ Versions below are the ones resolved by the committed `pom.xml` and `package-loc
 
 | Service | Used for | Plan | Licence / terms | If it stopped being free |
 |---|---|---|---|---|
-| **Google AI Studio (Gemini API)** | The one live AI provider — `gemini-3.7-flash` | Free tier | [Gemini API terms](https://ai.google.dev/gemini-api/terms); free tier has per-minute and per-day request limits | The model call sits behind a single `AiProvider` interface. Swapping to Groq's free tier, an OpenAI-compatible endpoint, or a locally-run Ollama model is one new class plus `AI_PROVIDER=<name>` — no change to the pipeline, the schema or the UI. Deliberately **not** implemented: no second live provider and no runtime failover ship, because the brief asks for this risk to be explained, not engineered around. |
+| **Google AI Studio (Gemini API)** | Primary AI provider — `gemini-3.1-flash-lite` | Free tier | [Gemini API terms](https://ai.google.dev/gemini-api/terms); free tier has tight per-minute and per-day request limits | Groq already backs it up automatically (below). Beyond that, the model call sits behind a single `AiProvider` interface, so an OpenAI-compatible endpoint or a locally-run Ollama model is one new class plus a config value. |
+| **Groq Cloud** | Fallback AI provider — `llama-3.3-70b-versatile` | Free tier | [Groq terms](https://groq.com/terms-of-use/); free tier has per-minute token limits and a generous daily allowance | It *is* the answer to Gemini becoming unavailable. If both were to disappear, the same interface takes any OpenAI-compatible endpoint. |
 | **Neon** | PostgreSQL (serverless) | Free tier | Free plan, no card required | Any PostgreSQL 13+ works. Supabase's free tier is a drop-in: change `DATABASE_URL`. The schema uses no Neon-specific features. |
 | **Render** | Backend hosting (Docker web service) | Free | Free plan; instance sleeps after 15 min idle, ~50s cold start | The deployable is a plain Spring Boot jar in a standard Dockerfile — Fly.io, Railway, Koyeb or any container host takes it unchanged. |
 | **Vercel** | Frontend hosting | Free hobby | Hobby plan | A stock Next.js app; Netlify or Cloudflare Pages deploy it with no code change, or `next build && next start` on any Node host. |
 
 ### Model
 
-| Model | Provider | Version pinned | Cost |
-|---|---|---|---|
-| `gemini-3.7-flash` | Google | Configurable via `GEMINI_MODEL` | Free tier |
+| Model | Role | Provider | Configurable via | Cost |
+|---|---|---|---|---|
+| `gemini-3.1-flash-lite` | Primary | Google | `GEMINI_MODEL` | Free tier |
+| `llama-3.3-70b-versatile` | Fallback | Groq (Meta weights) | `GROQ_MODEL` | Free tier |
 
 The original plan named `gemini-1.5-flash`. That model is retired. `gemini-2.5-flash` was tried
 next and **also failed** — it is still returned by the `models` endpoint, but calling it with a
@@ -38,7 +40,17 @@ is an alias that auto-follows the newest Flash model — more resilient, at the 
 changing under you between demos.
 
 Other models verified working with this pipeline's request shape on the same date:
-`gemini-flash-latest`, `gemini-3.5-flash-lite`.
+`gemini-flash-latest`, `gemini-3.5-flash-lite`, `gemini-3.7-flash`.
+
+**Why a lite model is the default.** `gemini-3.7-flash` produces better analysis, but its free tier
+allows roughly 20 requests a day — it was exhausted during a single testing session. The default is
+therefore `gemini-3.1-flash-lite` with thinking disabled (thinking tokens are charged against the
+same allowance and this task does not need them), which cut a typical run from 27 seconds to 8.
+
+**On the Groq side**, `llama-3.3-70b-versatile` is chosen for reliability rather than quality:
+`openai/gpt-oss-120b` writes noticeably richer analysis but only gets ~8k tokens per minute on the
+free tier, so it truncates mid-response and then rate-limits on the repair retry. A fallback that
+fails is not a fallback.
 
 ---
 

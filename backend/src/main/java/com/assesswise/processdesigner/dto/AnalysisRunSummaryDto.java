@@ -13,6 +13,8 @@ public record AnalysisRunSummaryDto(
         String model,
         boolean repairAttempted,
         List<String> validationWarnings,
+        /** Providers skipped or failed before this run was served. Empty when the primary answered. */
+        List<String> providerNotes,
         String errorMessage,
         Integer promptTokens,
         Integer outputTokens,

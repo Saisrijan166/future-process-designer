@@ -104,6 +104,8 @@ export interface AnalysisRunSummary {
   model: string;
   repairAttempted: boolean;
   validationWarnings: string[];
+  /** Providers skipped or failed before this run was served. Empty when the primary answered. */
+  providerNotes: string[];
   errorMessage?: string | null;
   promptTokens?: number | null;
   outputTokens?: number | null;

@@ -130,6 +130,7 @@ erDiagram
         text raw_response
         boolean repair_attempted
         text validation_warnings
+        text provider_notes
         text error_message
         int prompt_tokens
         int output_tokens
@@ -193,7 +194,9 @@ or pointing a foreign key at a guess.
 
 **`analysis_run` and `analysis_run_snippet` exist purely for traceability.** They store the exact
 prompt, the exact raw response, which snippets were retrieved, their relevance scores and matched
-terms, whether the repair retry was needed, and the token counts. This is what turns "the output is
+terms, whether the repair retry was needed, and the token counts. `provider` and `model` record who
+actually answered — which, with a fallback chain, is not always who was asked first — and
+`provider_notes` records why the earlier provider was passed over. This is what turns "the output is
 generated, not hard-coded" from an assertion into something a judge can check with a SQL query.
 
 **Deletes cascade from `process`.** One `DELETE FROM process WHERE id = ?` removes the activities,

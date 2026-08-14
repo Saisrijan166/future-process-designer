@@ -72,10 +72,8 @@ class GeminiProviderTest {
     }
 
     private GeminiProvider provider(String apiKey, int maxRetries) {
-        AppProperties properties = new AppProperties(
-                new AppProperties.Cors(List.of("http://localhost:3000")),
-                new AppProperties.Analysis(4, 30, 30, 30, 60, 0.34, new AppProperties.RateLimit(false, 20)),
-                new AppProperties.Ai("gemini", new AppProperties.Gemini(
+        return new GeminiProvider(
+                new AppProperties.Gemini(
                         apiKey,
                         "gemini-2.5-flash",
                         "http://127.0.0.1:" + server.getAddress().getPort(),
@@ -85,8 +83,8 @@ class GeminiProviderTest {
                         10,
                         true,
                         -1,
-                        maxRetries)));
-        return new GeminiProvider(properties, new ObjectMapper());
+                        maxRetries),
+                new ObjectMapper());
     }
 
     private static String successBody(String text) {

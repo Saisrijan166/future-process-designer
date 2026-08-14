@@ -78,15 +78,25 @@ app:
       enabled: ${ANALYSIS_RATE_LIMIT_ENABLED:true}
       permits-per-minute: ${ANALYSIS_RATE_LIMIT_PER_MINUTE:20}
   ai:
+    # The provider tried first, then the ordered fallbacks. Free tiers run out; the chain is what
+    # keeps a demo alive when they do.
     provider: ${AI_PROVIDER:gemini}
+    fallback-providers: ${AI_FALLBACK_PROVIDERS:groq}
     gemini:
       api-key: ${GEMINI_API_KEY:}
-      model: ${GEMINI_MODEL:gemini-3.7-flash}
+      model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
       temperature: ${GEMINI_TEMPERATURE:0.2}
       max-output-tokens: ${GEMINI_MAX_OUTPUT_TOKENS:8192}
       structured-output: ${GEMINI_STRUCTURED_OUTPUT:true}
-      # -1 leaves the model's own thinking default in place. Set 0 to disable thinking for speed.
-      thinking-budget: ${GEMINI_THINKING_BUDGET:-1}
+      # 0 disables model "thinking". Thinking tokens count against the same free-tier output
+      # allowance and this task does not need them. -1 restores the model's own default.
+      thinking-budget: ${GEMINI_THINKING_BUDGET:0}
+    groq:
+      api-key: ${GROQ_API_KEY:}
+      model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+      temperature: ${GROQ_TEMPERATURE:0.2}
+      max-output-tokens: ${GROQ_MAX_OUTPUT_TOKENS:4096}
+      structured-output: ${GROQ_STRUCTURED_OUTPUT:true}
 
 logging:
   level:

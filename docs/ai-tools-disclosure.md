@@ -11,7 +11,9 @@
 | Tool | Model | What it was used for |
 |---|---|---|
 | **Claude Code** (Anthropic) | Claude Opus 4.5 | Writing the implementation: Java source, SQL migrations, React/TypeScript components, tests, configuration and this documentation |
-| **Google Gemini** | `gemini-3.7-flash` | Not a build tool — it is the AI capability *inside* the shipped product, called at runtime by the analysis pipeline |
+| **Google Gemini** | `gemini-3.1-flash-lite` | Not a build tool — it is the AI capability *inside* the shipped product, called at runtime by the analysis pipeline |
+
+| **Groq** | `llama-3.3-70b-versatile` | Also part of the product, not the build: the fallback AI service used when Gemini is unavailable |
 
 No other code-generation tool was used. No code was copied from an existing project of mine or from
 a public repository; the application was built from scratch during this effort, on top of the
@@ -28,7 +30,7 @@ plan in `AI_FUTURE_PROCESS_DESIGNER_BUILD_PLAN.md`:
 - The REST controllers, DTOs, the RFC 7807 error handling and the configuration properties.
 - The prompt templates in `backend/src/main/resources/prompts/`.
 - The Next.js frontend in its entirety.
-- The 84 tests, including the integration suite that runs against a real PostgreSQL.
+- The 100 tests, including the integration suite that runs against a real PostgreSQL.
 - The Dockerfile, Render blueprint, CI workflow, and the documents in `docs/`.
 
 The AssessWise sample data — six processes, their activities, roles, systems and recorded pain
@@ -72,9 +74,11 @@ straightforward about the rest.*
 - **Curated research instead of live web search.** A deliberate trade-off: reproducible and
   auditable, at the cost of a small static corpus. The reasoning and the limitations are written
   down in [`sources.md`](sources.md) rather than glossed over.
-- **One live AI provider behind an interface, and no runtime failover.** The brief asks for the
-  "what if it stops being free" risk to be *explained*. Building a second provider would have looked
-  impressive and consumed time that the pipeline needed more.
+- **Failover, added after the risk stopped being hypothetical.** The original decision was one
+  provider and no failover, since the brief asks for the "what if it stops being free" risk to be
+  *explained*. Then Gemini's free tier ran out at twenty requests during testing — which would have
+  ended a live demo. Groq was added as a fallback. The point worth making is not that the design
+  changed, but that the `AiProvider` interface meant it cost one class and a config value.
 - **The traceability tables.** `analysis_run` storing the exact prompt and raw response is not in
   the original plan. It was added because "outputs are traceable" and "nothing is hard-coded" are
   claims that should be checkable with a SQL query, not taken on trust.
@@ -90,7 +94,7 @@ straightforward about the rest.*
 The repository is the evidence. Every claim above is checkable:
 
 ```bash
-cd backend && ./mvnw verify     # 84 tests, real PostgreSQL, real migrations
+cd backend && ./mvnw verify     # 100 tests, real PostgreSQL, real migrations
 git log --oneline               # the build history
 ```
 
@@ -98,6 +102,7 @@ And at runtime, the prompt and raw model response for any analysis are one click
 one query away in the database:
 
 ```sql
-SELECT model, repair_attempted, prompt_tokens, output_tokens, duration_ms, prompt_text, raw_response
+SELECT provider, model, provider_notes, repair_attempted,
+       prompt_tokens, output_tokens, duration_ms, prompt_text, raw_response
 FROM analysis_run ORDER BY started_at DESC LIMIT 1;
 ```

@@ -50,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="ml-auto flex items-center gap-1">
               <NavLink href="/">Processes</NavLink>
+              <NavLink href="/how-it-works">How it works</NavLink>
               <NavLink href="/evidence">Evidence</NavLink>
               <NavLink href="/processes/new">+ New process</NavLink>
             </nav>

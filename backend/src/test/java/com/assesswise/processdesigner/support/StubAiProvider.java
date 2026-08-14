@@ -50,7 +50,7 @@ public class StubAiProvider implements AiProvider {
     }
 
     public StubAiProvider respondWith(String text) {
-        scriptedResponses.add(() -> new AiCompletion(text, 100, 200, 5L, "STOP"));
+        scriptedResponses.add(() -> AiCompletion.of(text, 100, 200, 5L, "STOP", name(), model()));
         return this;
     }
 

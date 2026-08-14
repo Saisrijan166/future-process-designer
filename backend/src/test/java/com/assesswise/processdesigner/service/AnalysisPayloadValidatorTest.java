@@ -21,8 +21,7 @@ class AnalysisPayloadValidatorTest {
         return new AppProperties(
                 new AppProperties.Cors(List.of("http://localhost:3000")),
                 new AppProperties.Analysis(4, 30, 30, 30, 60, 0.34, new AppProperties.RateLimit(false, 20)),
-                new AppProperties.Ai("stub", new AppProperties.Gemini(
-                        "", "m", "http://localhost", 0.2, 1024, 5, 10, true, -1, 1)));
+                new AppProperties.Ai("stub", List.of(), TestProviders.gemini(), TestProviders.groq()));
     }
 
     private AiAnalysisPayload payload(

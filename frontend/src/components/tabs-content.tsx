@@ -31,8 +31,8 @@ export function CurrentTab({
     <div className="space-y-6">
       <section>
         <SectionHeading
-          title="Current activities"
-          description="The process as it runs today, with the people and systems involved at each step and the problems recorded against them."
+          title="How it runs today"
+          description="Each step of the current process, who performs it, which systems it touches, and what goes wrong."
         />
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
@@ -139,8 +139,8 @@ export function TransitionTab({ opportunities }: { opportunities: AiOpportunity[
   if (opportunities.length === 0) {
     return (
       <EmptyState
-        title="No AI opportunities yet"
-        description="Run the analysis to generate opportunities for this process."
+        title="No AI ideas yet"
+        description="Press Analyse at the top of the page to generate them."
       />
     );
   }
@@ -148,8 +148,8 @@ export function TransitionTab({ opportunities }: { opportunities: AiOpportunity[
   return (
     <div className="space-y-4">
       <SectionHeading
-        title={`AI opportunities (${opportunities.length})`}
-        description="Each opportunity records the capability, the benefit, the risk, the reasoning, and the research sources that informed it."
+        title={`Where AI could help (${opportunities.length} ideas)`}
+        description="Each one names the specific AI capability, what the business gains, what could go wrong, why it follows from this process, and which research sources back it up."
       />
       <ol className="space-y-4">
         {opportunities.map((opportunity, index) => (
@@ -238,8 +238,8 @@ export function FutureTab({
   if (futureActivities.length === 0) {
     return (
       <EmptyState
-        title="No future state yet"
-        description="Run the analysis to design the AI-enabled future process."
+        title="No future process yet"
+        description="Press Analyse at the top of the page to design it."
       />
     );
   }
@@ -250,8 +250,8 @@ export function FutureTab({
     <div className="space-y-6">
       <section>
         <SectionHeading
-          title={`Future process (${futureActivities.length} steps)`}
-          description="The redesigned process, step by step, with what a person stays accountable for and what the AI does."
+          title={`The redesigned process (${futureActivities.length} steps)`}
+          description="How the process would run with AI in it. Every step says what a person is still accountable for, what the AI does, and what changed from today."
         />
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
@@ -347,8 +347,8 @@ export function EvidenceTab({ evidence }: { evidence: RetrievedSnippet[] }) {
   if (evidence.length === 0) {
     return (
       <EmptyState
-        title="No evidence retrieved yet"
-        description="Grounding sources are selected when the analysis runs. Run it to see which sources informed this process."
+        title="No research selected yet"
+        description="Sources are chosen when the analysis runs. Press Analyse to see which ones were used."
       />
     );
   }
@@ -356,8 +356,8 @@ export function EvidenceTab({ evidence }: { evidence: RetrievedSnippet[] }) {
   return (
     <div className="space-y-4">
       <SectionHeading
-        title={`Grounding sources (${evidence.length})`}
-        description="These are the curated research snippets the retriever selected for this process and injected into the prompt. The score and matched terms explain why each one was chosen."
+        title={`Research used for this analysis (${evidence.length} sources)`}
+        description="Out of the 16 sources in the library, these are the ones the system judged most relevant to this process and showed to the AI. The score and matched words explain why each was picked — a score of 0.00 means nothing matched and it was included only as general background."
       />
       <ul className="grid gap-4 md:grid-cols-2">
         {evidence.map((retrieved) => (

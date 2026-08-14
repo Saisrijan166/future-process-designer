@@ -37,14 +37,43 @@ public record AppProperties(
             @DefaultValue("20") int permitsPerMinute) {}
 
     public record Ai(
-            /** Selects the live provider implementation. Only "gemini" ships. */
+            /** The provider tried first. "stub" disables live providers entirely (used by tests). */
             @DefaultValue("gemini") String provider,
-            @DefaultValue Gemini gemini) {}
+            /**
+             * Providers tried, in order, when the primary fails — typically because a free-tier
+             * quota is exhausted. Empty means no failover: the first failure is the final answer.
+             */
+            @DefaultValue({"groq"}) List<String> fallbackProviders,
+            @DefaultValue Gemini gemini,
+            @DefaultValue Groq groq) {}
+
+    /** Fields common to every HTTP-based provider, so the two configs stay comparable. */
+    public interface ProviderConfig {
+        String apiKey();
+
+        String model();
+
+        String baseUrl();
+
+        double temperature();
+
+        int maxOutputTokens();
+
+        int connectTimeoutSeconds();
+
+        int readTimeoutSeconds();
+
+        int maxTransportRetries();
+
+        default boolean isConfigured() {
+            return apiKey() != null && !apiKey().isBlank();
+        }
+    }
 
     public record Gemini(
             /** Google AI Studio API key. Never commit this; supply via GEMINI_API_KEY. */
             @DefaultValue("") String apiKey,
-            @DefaultValue("gemini-3.7-flash") String model,
+            @DefaultValue("gemini-3.1-flash-lite") String model,
             @DefaultValue("https://generativelanguage.googleapis.com/v1beta") String baseUrl,
             @DefaultValue("0.2") double temperature,
             @DefaultValue("8192") int maxOutputTokens,
@@ -56,15 +85,31 @@ public record AppProperties(
              */
             @DefaultValue("true") boolean structuredOutput,
             /**
-             * Thinking budget for models that support it (2.5 family). {@code -1} leaves the
-             * model default in place and omits the field from the request.
+             * Thinking budget for models that support it. {@code 0} disables thinking, which on
+             * the free tier matters: thinking tokens are billed against the same output allowance,
+             * and this task does not need them. {@code -1} leaves the model default in place.
              */
-            @DefaultValue("-1") int thinkingBudget,
+            @DefaultValue("0") int thinkingBudget,
             /** Retries for transport-level failures (timeouts, 429, 5xx) — separate from JSON repair. */
-            @DefaultValue("2") int maxTransportRetries) {
+            @DefaultValue("2") int maxTransportRetries)
+            implements ProviderConfig {}
 
-        public boolean isConfigured() {
-            return apiKey != null && !apiKey.isBlank();
-        }
-    }
+    public record Groq(
+            /** Groq Cloud API key. Free tier, generous daily limits. Supply via GROQ_API_KEY. */
+            @DefaultValue("") String apiKey,
+            @DefaultValue("llama-3.3-70b-versatile") String model,
+            @DefaultValue("https://api.groq.com/openai/v1") String baseUrl,
+            @DefaultValue("0.2") double temperature,
+            /**
+             * Deliberately lower than Gemini's. Groq reserves the requested maximum against the
+             * free tier's tokens-per-minute budget, so asking for 8192 gets the larger models
+             * rejected before they even run.
+             */
+            @DefaultValue("4096") int maxOutputTokens,
+            @DefaultValue("20") int connectTimeoutSeconds,
+            @DefaultValue("120") int readTimeoutSeconds,
+            /** Groq's OpenAI-compatible JSON mode. The local validator runs either way. */
+            @DefaultValue("true") boolean structuredOutput,
+            @DefaultValue("2") int maxTransportRetries)
+            implements ProviderConfig {}
 }

@@ -160,6 +160,7 @@ public class DomainMapper {
                 run.getModel(),
                 run.isRepairAttempted(),
                 splitLines(run.getValidationWarnings()),
+                splitLines(run.getProviderNotes()),
                 run.getErrorMessage(),
                 run.getPromptTokens(),
                 run.getOutputTokens(),

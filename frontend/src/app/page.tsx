@@ -20,22 +20,54 @@ export default function DashboardPage() {
       <section>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-3xl">
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">Processes</h1>
-            <p className="mt-2 text-sm text-ink-600">
-              Pick a process to see how it runs today, where AI could change it, and what the
-              redesigned process looks like. The same pipeline runs for the sample processes and for
-              anything you create — try it with a process from your own industry.
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">
+              Redesign a business process around AI
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-ink-600">
+              Describe how a process works <strong>today</strong> — the steps, who does them, what
+              goes wrong. The system finds where AI could genuinely help, then writes out the
+              redesigned process step by step, saying for each one what a person still owns and what
+              the AI does.
+            </p>
+            <p className="mt-2 text-sm text-ink-500">
+              Open a sample below to see a finished result, or{" "}
+              <Link href="/how-it-works" className="font-medium text-brand-700 hover:underline">
+                read how it works
+              </Link>
+              .
             </p>
           </div>
           <ButtonLink href="/processes/new">+ New process</ButtonLink>
         </div>
 
+        <ol className="mt-6 grid gap-3 sm:grid-cols-3">
+          {[
+            { n: 1, t: "Describe it as it is now", d: "Four or five steps is enough. Any industry." },
+            { n: 2, t: "Press Analyse", d: "Takes 5–30 seconds. Nothing is pre-written." },
+            { n: 3, t: "Read the redesign", d: "With the reasoning, risks and sources behind it." },
+          ].map((step) => (
+            <li key={step.n} className="flex gap-3 rounded-lg border border-ink-200 bg-white p-3">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-700">
+                {step.n}
+              </span>
+              <div>
+                <p className="text-sm font-medium text-ink-900">{step.t}</p>
+                <p className="text-xs text-ink-500">{step.d}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
         {processes && processes.length > 0 ? (
           <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Processes" value={processes.length} />
-            <Stat label="Analysed" value={analysed.length} hint={`${processes.length - analysed.length} not yet run`} />
-            <Stat label="AI opportunities" value={opportunities} />
-            <Stat label="Future activities" value={futureActivities} />
+            <Stat
+              label="Analysed"
+              value={analysed.length}
+              hint={`${processes.length - analysed.length} waiting to be run`}
+            />
+            <Stat label="AI ideas found" value={opportunities} />
+            <Stat label="Future steps designed" value={futureActivities} />
           </dl>
         ) : null}
       </section>
@@ -62,9 +94,9 @@ export default function DashboardPage() {
                 <tr>
                   <th scope="col" className="px-4 py-3 font-semibold">Process</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Industry</th>
-                  <th scope="col" className="px-4 py-3 text-right font-semibold">Activities</th>
-                  <th scope="col" className="px-4 py-3 text-right font-semibold">Opportunities</th>
-                  <th scope="col" className="px-4 py-3 text-right font-semibold">Future steps</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Steps today</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">AI ideas</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Steps after</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Status</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Last analysed</th>
                 </tr>
@@ -89,7 +121,9 @@ export default function DashboardPage() {
                       {process.status === "ANALYZED" ? (
                         <Badge tone="success">Analysed</Badge>
                       ) : (
-                        <Badge tone="neutral">Current only</Badge>
+                        <Badge tone="neutral" title="Press Analyse on this process to generate its future state">
+                          Not analysed yet
+                        </Badge>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs whitespace-nowrap text-ink-500">
