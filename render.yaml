@@ -32,9 +32,18 @@ services:
         generateValue: true
       - key: AUTH_DEMO_ACCOUNT_ENABLED
         value: "false"
+      # The deployed frontend origin, e.g. https://future-process-designer.vercel.app
+      # Wildcards are supported, so https://*.vercel.app also covers preview deployments.
       - key: APP_CORS_ALLOWED_ORIGINS
         sync: false
       - key: DATABASE_POOL_SIZE
         value: "3"
+      # Matches the application default. The lite model is deliberate: the full Flash
+      # models allow only ~20 requests a day on the free tier. Raise it here if you have
+      # the quota and want the richer analysis.
       - key: GEMINI_MODEL
-        value: gemini-3.7-flash
+        value: gemini-3.1-flash-lite
+      # Thinking tokens are charged against the same free allowance and this task does
+      # not need them.
+      - key: GEMINI_THINKING_BUDGET
+        value: "0"

@@ -1,10 +1,12 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  // The backend is a separate service (Render); this app is a pure client of its REST API.
-  env: {},
+  // Pin the file-tracing root to this directory. Without it Next walks up looking for a
+  // lockfile and can pick one up from outside the project, which changes what gets bundled.
+  outputFileTracingRoot: path.join(__dirname),
   async headers() {
     return [
       {

@@ -199,59 +199,19 @@ never packaged.
 
 ## Deploy it
 
-### Database — Neon
+Full step-by-step instructions, with the exact environment variables for each platform, are in
+**[DEPLOYMENT.md](DEPLOYMENT.md)**. The short version:
 
-1. Create a free project at <https://neon.tech> and copy the connection details.
-2. Convert the connection string to JDBC form and keep `sslmode=require`:
-   `jdbc:postgresql://ep-xxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require`
+| Step | Service | What you set |
+|---|---|---|
+| 1 | **Neon** — database | Nothing. Copy the *pooled* connection string; Flyway creates the schema and seeds the samples on first boot |
+| 2 | **Render** — backend | `DATABASE_URL` / `DATABASE_USERNAME` / `DATABASE_PASSWORD`, `AUTH_JWT_SECRET`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `APP_CORS_ALLOWED_ORIGINS`. [`render.yaml`](render.yaml) sets the rest |
+| 3 | **Vercel** — frontend | Root directory `frontend`, and `NEXT_PUBLIC_API_BASE_URL` pointing at the Render URL |
+| 4 | back to **Render** | Put the Vercel URL into `APP_CORS_ALLOWED_ORIGINS` — until you do, the browser blocks every call |
 
-Flyway will create the schema and seed data on the backend's first start.
-
-### Backend — Render
-
-Either use the committed [`render.yaml`](render.yaml) blueprint, or create a Web Service manually:
-
-| Setting | Value |
-|---|---|
-| Runtime | Docker |
-| Dockerfile path | `./backend/Dockerfile` |
-| Docker context | `./backend` |
-| Health check path | `/actuator/health` |
-| Plan | Free |
-
-Environment variables to set in the dashboard:
-
-```
-DATABASE_URL=jdbc:postgresql://...neon.tech/neondb?sslmode=require
-DATABASE_USERNAME=...
-DATABASE_PASSWORD=...
-DATABASE_POOL_SIZE=3
-GEMINI_API_KEY=...
-GROQ_API_KEY=...
-AUTH_JWT_SECRET=...            # openssl rand -base64 48
-AUTH_DEMO_ACCOUNT_ENABLED=false
-APP_CORS_ALLOWED_ORIGINS=https://your-app.vercel.app
-```
-
-### Frontend — Vercel
-
-Import the repository, then:
-
-| Setting | Value |
-|---|---|
-| Root directory | `frontend` |
-| Framework preset | Next.js (auto-detected) |
-| Environment variable | `NEXT_PUBLIC_API_BASE_URL=https://your-api.onrender.com` |
-
-Then come back and add the Vercel URL to `APP_CORS_ALLOWED_ORIGINS` on Render.
-
-### Before demoing
-
-The free Render instance sleeps after 15 minutes idle and takes about a minute to wake. **Load the
-site a couple of minutes before you present.** The UI handles a cold start gracefully — it says the
-backend is waking up rather than showing an error — but a warm instance makes for a better demo.
-
----
+Two things that catch people out, both covered in the guide: Vercel's **Root Directory must be
+`frontend`**, and `NEXT_PUBLIC_API_BASE_URL` is baked in **at build time**, so changing it needs a
+redeploy rather than a restart.
 
 ## Configuration reference
 
@@ -426,6 +386,7 @@ docs/
 
 ## Documentation
 
+- [Deployment guide](DEPLOYMENT.md) — Neon, Render and Vercel, with every environment variable
 - [Architecture](docs/architecture-diagram.md) — layers, pipeline sequence, deployment topology
 - [Data model](docs/data-model.md) — ER diagram, the join path, schema decisions
 - [Research sources](docs/sources.md) — all 16 sources with real URLs

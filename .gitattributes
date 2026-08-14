@@ -1,0 +1,12 @@
+# Normalise line endings so a checkout on Windows does not rewrite files and
+# break the Maven wrapper or the shell scripts.
+* text=auto eol=lf
+
+# These must keep their native endings to remain executable.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# Never touch binaries.
+*.png  binary
+*.jpg  binary
+*.ico  binary
