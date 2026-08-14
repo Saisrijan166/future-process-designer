@@ -6,6 +6,7 @@ import com.assesswise.processdesigner.domain.ProcessStatus;
 import com.assesswise.processdesigner.dto.ProcessDetailDto;
 import com.assesswise.processdesigner.dto.ProcessPageDto;
 import com.assesswise.processdesigner.dto.UpdateProcessRequest;
+import com.assesswise.processdesigner.security.CurrentUserService;
 import com.assesswise.processdesigner.service.ProcessService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -30,9 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProcessController {
 
     private final ProcessService processService;
+    private final CurrentUserService currentUserService;
 
-    public ProcessController(ProcessService processService) {
+    public ProcessController(ProcessService processService, CurrentUserService currentUserService) {
         this.processService = processService;
+        this.currentUserService = currentUserService;
     }
 
     @GetMapping
@@ -51,7 +54,7 @@ public class ProcessController {
             @RequestParam(required = false) String q,
             @Parameter(description = "recent | oldest | name | analysed")
             @RequestParam(defaultValue = "recent") String sort) {
-        return processService.listProcesses(page, size, status, q, sort);
+        return processService.listProcesses(currentUserService.require(), page, size, status, q, sort);
     }
 
     @PostMapping
@@ -59,33 +62,33 @@ public class ProcessController {
             description = "Accepts any process from any industry. This is the endpoint used for the live "
                     + "surprise-record test; no code path depends on which process is created.")
     public ResponseEntity<ProcessDetailDto> create(@Valid @RequestBody CreateProcessRequest request) {
-        ProcessDetailDto created = processService.create(request);
+        ProcessDetailDto created = processService.create(currentUserService.require(), request);
         return ResponseEntity.created(URI.create("/api/processes/" + created.process().id())).body(created);
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Full detail: current state, AI opportunities, future state and evidence")
     public ProcessDetailDto get(@PathVariable UUID id) {
-        return processService.getDetail(id);
+        return processService.getDetail(currentUserService.require(), id);
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Replace a process definition",
             description = "Replacing the activities invalidates any generated future state, which is cleared.")
     public ProcessDetailDto update(@PathVariable UUID id, @Valid @RequestBody UpdateProcessRequest request) {
-        return processService.update(id, request);
+        return processService.update(currentUserService.require(), id, request);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a process and everything derived from it")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        processService.delete(id);
+        processService.delete(currentUserService.require(), id);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/comparison")
     @Operation(summary = "The CURRENT / TRANSITION / FUTURE comparison view with roll-up counters")
     public ComparisonDto comparison(@PathVariable UUID id) {
-        return processService.getComparison(id);
+        return processService.getComparison(currentUserService.require(), id);
     }
 }

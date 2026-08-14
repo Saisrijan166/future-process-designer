@@ -10,6 +10,7 @@ Defined in [`V1__baseline_schema.sql`](../backend/src/main/resources/db/migratio
 
 ```mermaid
 erDiagram
+    APP_USER ||--o{ PROCESS : "owns (NULL = shared sample)"
     PROCESS ||--o{ ACTIVITY : "has current steps"
     PROCESS ||--o{ PROBLEM : "has pain points"
     PROCESS ||--o{ AI_OPPORTUNITY : "has opportunities"
@@ -28,8 +29,18 @@ erDiagram
 
     ANALYSIS_RUN }o--o{ KNOWLEDGE_SNIPPET : "analysis_run_snippet"
 
+    APP_USER {
+        uuid id PK
+        varchar email UK "unique on lower(email)"
+        varchar password_hash "BCrypt"
+        varchar display_name
+        timestamptz created_at
+        timestamptz last_login_at
+    }
+
     PROCESS {
         uuid id PK
+        uuid owner_id FK "nullable - NULL means a shared sample"
         varchar name
         varchar industry
         text description
@@ -173,6 +184,17 @@ ORDER BY a.sequence_order, fa.sequence_order;
 ```
 
 ## Design decisions worth defending
+
+**`process.owner_id` is nullable, and the null means something.** A row with an owner is private
+to that account; a row without one is a shared sample that everyone can read and analyse and
+nobody can edit or delete. Encoding "shared" as the absence of an owner rather than as a separate
+boolean keeps the two facts from ever disagreeing, and lets the visibility rule be a single clause
+in the listing query: `where p.owner.id = :me or p.owner is null`.
+
+Everything downstream — activities, problems, opportunities, future activities, interventions,
+analysis runs — inherits its scope through the process foreign key, so no other table needs an
+owner column. `knowledge_snippet`, `role` and `system_tool` stay deliberately global: they are
+reference data, not user content.
 
 **UUID keys generated in the application, not the database.** Keeps the schema portable across
 Neon, Supabase and a local Postgres without depending on an extension, and lets the service build a

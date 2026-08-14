@@ -67,6 +67,8 @@ Runtime: **Eclipse Temurin JDK 21** (GPL-2.0 with Classpath Exception).
 | `spring-boot-starter-data-jpa` | 3.5.16 | Apache-2.0 | Repositories and transaction management |
 | `spring-boot-starter-validation` | 3.5.16 | Apache-2.0 | Bean Validation on request DTOs |
 | `spring-boot-starter-actuator` | 3.5.16 | Apache-2.0 | `/actuator/health` for the Render health check |
+| `spring-boot-starter-security` | 3.5.16 | Apache-2.0 | Authentication filter chain and BCrypt password hashing |
+| `spring-boot-starter-oauth2-resource-server` | 3.5.16 | Apache-2.0 | JWT signing and verification through Nimbus JOSE, so no third-party JWT library is needed |
 | `flyway-core` | 11.7.2 | Apache-2.0 | Versioned schema migrations |
 | `flyway-database-postgresql` | 11.7.2 | Apache-2.0 | Postgres support for Flyway 11 |
 | `postgresql` (JDBC driver) | 42.7.11 | BSD-2-Clause | Database connectivity |
@@ -79,6 +81,7 @@ Runtime: **Eclipse Temurin JDK 21** (GPL-2.0 with Classpath Exception).
 | Library | Version | Licence | Why it is here |
 |---|---|---|---|
 | `spring-boot-starter-test` | 3.5.16 | Apache-2.0 | JUnit 5, AssertJ, Mockito, `TestRestTemplate` |
+| `spring-security-test` | 6.5.x | Apache-2.0 | Security-aware test support |
 | `embedded-postgres` | 2.2.2 | Apache-2.0 | Starts a real PostgreSQL 16 from bundled binaries — integration tests run the actual migrations without Docker or a preinstalled server |
 | `embedded-postgres-binaries-*` | 16.14.0 | PostgreSQL Licence | The PostgreSQL binaries the above starts |
 

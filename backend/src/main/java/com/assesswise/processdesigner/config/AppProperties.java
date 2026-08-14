@@ -13,7 +13,32 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record AppProperties(
         @DefaultValue Cors cors,
         @DefaultValue Analysis analysis,
-        @DefaultValue Ai ai) {
+        @DefaultValue Ai ai,
+        @DefaultValue Auth auth) {
+
+    public record Auth(
+            /**
+             * HMAC signing key for session tokens. Must be at least 32 characters. The default is
+             * a development-only value and the application logs a warning if it is still in use —
+             * anyone holding it can mint a token for any account.
+             */
+            @DefaultValue("dev-only-insecure-signing-key-change-me-in-production")
+            String jwtSecret,
+            /** How long a sign-in lasts. Long enough not to expire mid-demo. */
+            @DefaultValue("12") long tokenTtlHours,
+            @DefaultValue DemoAccount demoAccount) {
+
+        public boolean usingDefaultSecret() {
+            return jwtSecret.startsWith("dev-only-insecure");
+        }
+    }
+
+    public record DemoAccount(
+            /** Creates a known account on startup if it does not exist. Turn off outside a demo. */
+            @DefaultValue("true") boolean enabled,
+            @DefaultValue("demo@assesswise.test") String email,
+            @DefaultValue("demo12345") String password,
+            @DefaultValue("Demo User") String displayName) {}
 
     public record Cors(
             /** Origins allowed to call the API. Set APP_CORS_ALLOWED_ORIGINS in production. */

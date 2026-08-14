@@ -1,9 +1,12 @@
 package com.assesswise.processdesigner.controller;
 
+import com.assesswise.processdesigner.exception.AccessDeniedForResourceException;
 import com.assesswise.processdesigner.exception.AiNotConfiguredException;
 import com.assesswise.processdesigner.exception.AiProviderException;
 import com.assesswise.processdesigner.exception.AnalysisFailedException;
 import com.assesswise.processdesigner.exception.AnalysisInProgressException;
+import com.assesswise.processdesigner.exception.EmailAlreadyRegisteredException;
+import com.assesswise.processdesigner.exception.InvalidCredentialsException;
 import com.assesswise.processdesigner.exception.RateLimitExceededException;
 import com.assesswise.processdesigner.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,6 +39,21 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleBadCredentials(InvalidCredentialsException e, HttpServletRequest request) {
+        return problem(HttpStatus.UNAUTHORIZED, "Sign-in failed", e.getMessage(), request);
+    }
+
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    public ProblemDetail handleDuplicateEmail(EmailAlreadyRegisteredException e, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Email already registered", e.getMessage(), request);
+    }
+
+    @ExceptionHandler(AccessDeniedForResourceException.class)
+    public ProblemDetail handleForbidden(AccessDeniedForResourceException e, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "Not allowed", e.getMessage(), request);
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException e, HttpServletRequest request) {

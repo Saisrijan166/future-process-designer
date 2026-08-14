@@ -11,9 +11,11 @@ import com.assesswise.processdesigner.dto.ProcessPageDto;
 import com.assesswise.processdesigner.dto.ProcessSummaryDto;
 import com.assesswise.processdesigner.dto.UpdateProcessRequest;
 import com.assesswise.processdesigner.support.AbstractIntegrationTest;
+import com.assesswise.processdesigner.support.AuthenticatedClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,15 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    private AuthenticatedClient client;
+
+    @BeforeEach
+    void signIn() {
+        // A fresh account per test: its listing contains the shared samples plus only what this
+        // test creates, so assertions do not depend on what other tests left behind.
+        client = AuthenticatedClient.register(restTemplate, "process-api");
+    }
 
     private static CreateProcessRequest request(String name) {
         return new CreateProcessRequest(
@@ -45,7 +56,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
 
     /** Pulls every row across pages, so assertions do not depend on the default page size. */
     private List<ProcessSummaryDto> allProcesses() {
-        ProcessPageDto first = restTemplate.getForObject("/api/processes?size=100", ProcessPageDto.class);
+        ProcessPageDto first = client.getBody("/api/processes?size=100", ProcessPageDto.class);
         return first.items();
     }
 
@@ -82,7 +93,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
                 .filter(process -> process.name().equals("Result Evaluation & Grading"))
                 .findFirst().orElseThrow().id();
 
-        ProcessDetailDto detail = restTemplate.getForObject("/api/processes/" + gradingId, ProcessDetailDto.class);
+        ProcessDetailDto detail = client.getBody("/api/processes/" + gradingId, ProcessDetailDto.class);
 
         assertThat(detail.activities()).hasSize(6);
         assertThat(detail.activities().getFirst().sequenceOrder()).isEqualTo(1);
@@ -105,7 +116,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
         String name = "Account Opening " + UUID.randomUUID();
 
         ResponseEntity<ProcessDetailDto> response =
-                restTemplate.postForEntity("/api/processes", request(name), ProcessDetailDto.class);
+                client.post("/api/processes", request(name), ProcessDetailDto.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getHeaders().getLocation()).isNotNull();
@@ -118,9 +129,8 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(detail.activities().get(1).roles()).containsExactly("Branch Officer", "Compliance Officer");
 
         // Creating a second process reuses the Role rows rather than duplicating them.
-        restTemplate.postForEntity("/api/processes", request("Account Opening " + UUID.randomUUID()),
-                ProcessDetailDto.class);
-        List<?> roles = restTemplate.getForObject("/api/roles", List.class);
+        client.post("/api/processes", request("Account Opening " + UUID.randomUUID()), ProcessDetailDto.class);
+        List<?> roles = client.getBody("/api/roles", List.class);
         long branchOfficerRows = roles.stream()
                 .filter(role -> "Branch Officer".equals(((java.util.Map<?, ?>) role).get("name")))
                 .count();
@@ -139,7 +149,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
                         List.of("Clerk", "clerk", " CLERK "), List.of("Tool", ""))));
 
         ProcessDetailDto detail =
-                restTemplate.postForEntity("/api/processes", messy, ProcessDetailDto.class).getBody();
+                client.post("/api/processes", messy, ProcessDetailDto.class).getBody();
 
         assertThat(detail.process().name()).doesNotStartWith(" ").doesNotEndWith(" ");
         assertThat(detail.process().industry()).isEqualTo("Logistics");
@@ -151,10 +161,8 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("rejects an invalid create request with per-field messages")
     void rejectsInvalidCreate() {
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                "/api/processes",
-                new CreateProcessRequest("", "", "", List.of()),
-                String.class);
+        ResponseEntity<String> response = client.post(
+                "/api/processes", new CreateProcessRequest("", "", "", List.of()), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody())
@@ -167,7 +175,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("updating the activities clears any generated future state")
     void updateResetsAnalysis() {
         String name = "Updatable " + UUID.randomUUID();
-        UUID id = restTemplate.postForEntity("/api/processes", request(name), ProcessDetailDto.class)
+        UUID id = client.post("/api/processes", request(name), ProcessDetailDto.class)
                 .getBody().process().id();
 
         UpdateProcessRequest update = new UpdateProcessRequest(
@@ -177,8 +185,8 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
                 List.of(new CreateProcessRequest.ActivityInput(
                         "A single replacement activity", "Replaces both originals.", List.of(), List.of())));
 
-        ResponseEntity<ProcessDetailDto> response = restTemplate.exchange(
-                "/api/processes/" + id, HttpMethod.PUT, new HttpEntity<>(update), ProcessDetailDto.class);
+        ResponseEntity<ProcessDetailDto> response =
+                client.put("/api/processes/" + id, update, ProcessDetailDto.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         ProcessDetailDto detail = response.getBody();
@@ -192,23 +200,21 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("deletes a process and everything derived from it")
     void deletesProcess() {
-        UUID id = restTemplate.postForEntity(
-                        "/api/processes", request("Deletable " + UUID.randomUUID()), ProcessDetailDto.class)
+        UUID id = client.post("/api/processes", request("Deletable " + UUID.randomUUID()), ProcessDetailDto.class)
                 .getBody().process().id();
 
-        ResponseEntity<Void> deleted =
-                restTemplate.exchange("/api/processes/" + id, HttpMethod.DELETE, null, Void.class);
+        ResponseEntity<Void> deleted = client.delete("/api/processes/" + id, Void.class);
 
         assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-        assertThat(restTemplate.getForEntity("/api/processes/" + id, String.class).getStatusCode())
+        assertThat(client.get("/api/processes/" + id, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
     @DisplayName("every curated snippet has a real source URL and a retrieval date")
     void knowledgeSnippetsAreCited() {
-        List<KnowledgeSnippetDto> snippets = restTemplate.exchange(
-                "/api/knowledge-snippets", HttpMethod.GET, null,
+        List<KnowledgeSnippetDto> snippets = client.get(
+                "/api/knowledge-snippets",
                 new ParameterizedTypeReference<List<KnowledgeSnippetDto>>() {}).getBody();
 
         assertThat(snippets).hasSize(16);
@@ -226,11 +232,10 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("a comparison for an un-analysed process renders as empty rather than failing")
     void comparisonHandlesUnanalysedProcess() {
-        UUID id = restTemplate.postForEntity(
-                        "/api/processes", request("Never Analysed " + UUID.randomUUID()), ProcessDetailDto.class)
+        UUID id = client.post("/api/processes", request("Never Analysed " + UUID.randomUUID()), ProcessDetailDto.class)
                 .getBody().process().id();
 
-        var comparison = restTemplate.getForObject(
+        var comparison = client.getBody(
                 "/api/processes/" + id + "/comparison",
                 com.assesswise.processdesigner.dto.ComparisonDto.class);
 
@@ -245,11 +250,10 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("asking for the trace before any analysis returns 404, not an empty shell")
     void traceBeforeAnalysis() {
-        UUID id = restTemplate.postForEntity(
-                        "/api/processes", request("No Trace Yet " + UUID.randomUUID()), ProcessDetailDto.class)
+        UUID id = client.post("/api/processes", request("No Trace Yet " + UUID.randomUUID()), ProcessDetailDto.class)
                 .getBody().process().id();
 
-        assertThat(restTemplate.getForEntity(
+        assertThat(client.get(
                         "/api/processes/" + id + "/analysis-runs/latest/trace", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -257,7 +261,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("rejects a malformed UUID with 400 rather than 500")
     void rejectsMalformedId() {
-        assertThat(restTemplate.getForEntity("/api/processes/not-a-uuid", String.class).getStatusCode())
+        assertThat(client.get("/api/processes/not-a-uuid", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
@@ -266,7 +270,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("pages the listing without dropping or repeating a row")
     void pagesCleanly() {
-        ProcessPageDto everything = restTemplate.getForObject("/api/processes?size=100", ProcessPageDto.class);
+        ProcessPageDto everything = client.getBody("/api/processes?size=100", ProcessPageDto.class);
         long total = everything.totalItems();
         assertThat(total).isGreaterThanOrEqualTo(6);
 
@@ -274,7 +278,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
         int page = 0;
         ProcessPageDto current;
         do {
-            current = restTemplate.getForObject("/api/processes?size=2&page=" + page, ProcessPageDto.class);
+            current = client.getBody("/api/processes?size=2&page=" + page, ProcessPageDto.class);
             assertThat(current.page()).isEqualTo(page);
             assertThat(current.size()).isEqualTo(2);
             assertThat(current.items()).hasSizeLessThanOrEqualTo(2);
@@ -291,7 +295,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("the status filter applies to the whole dataset, not just the visible page")
     void filtersAcrossTheDataset() {
-        ProcessPageDto pending = restTemplate.getForObject(
+        ProcessPageDto pending = client.getBody(
                 "/api/processes?status=CURRENT_ONLY&size=100", ProcessPageDto.class);
 
         assertThat(pending.items()).isNotEmpty();
@@ -303,8 +307,8 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("the headline stats describe the dataset, so filtering does not move them")
     void statsIgnoreTheFilter() {
-        ProcessPageDto unfiltered = restTemplate.getForObject("/api/processes", ProcessPageDto.class);
-        ProcessPageDto filtered = restTemplate.getForObject(
+        ProcessPageDto unfiltered = client.getBody("/api/processes", ProcessPageDto.class);
+        ProcessPageDto filtered = client.getBody(
                 "/api/processes?status=ANALYZED&q=zzzz-no-match", ProcessPageDto.class);
 
         assertThat(filtered.items()).isEmpty();
@@ -317,18 +321,18 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("search matches name, industry and description")
     void searchesAcrossFields() {
-        assertThat(restTemplate.getForObject("/api/processes?q=proctoring", ProcessPageDto.class).items())
+        assertThat(client.getBody("/api/processes?q=proctoring", ProcessPageDto.class).items())
                 .anySatisfy(item -> assertThat(item.name()).contains("Proctoring"));
-        assertThat(restTemplate.getForObject("/api/processes?q=ONLINE EDUCATION", ProcessPageDto.class).items())
+        assertThat(client.getBody("/api/processes?q=ONLINE EDUCATION", ProcessPageDto.class).items())
                 .isNotEmpty();
-        assertThat(restTemplate.getForObject("/api/processes?q=certificate", ProcessPageDto.class).items())
+        assertThat(client.getBody("/api/processes?q=certificate", ProcessPageDto.class).items())
                 .isNotEmpty();
     }
 
     @Test
     @DisplayName("a wildcard typed into search is treated as a literal, not as match-everything")
     void escapesWildcards() {
-        ProcessPageDto result = restTemplate.getForObject("/api/processes?q=%25", ProcessPageDto.class);
+        ProcessPageDto result = client.getBody("/api/processes?q=%25", ProcessPageDto.class);
 
         assertThat(result.items()).isEmpty();
         assertThat(result.totalItems()).isZero();
@@ -337,8 +341,8 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("sorting by name is honoured despite the grouped projection")
     void sortsByName() {
-        List<String> names = restTemplate
-                .getForObject("/api/processes?sort=name&size=100", ProcessPageDto.class)
+        List<String> names = client
+                .getBody("/api/processes?sort=name&size=100", ProcessPageDto.class)
                 .items().stream().map(ProcessSummaryDto::name).toList();
 
         assertThat(names).isSortedAccordingTo(String.CASE_INSENSITIVE_ORDER);
@@ -347,14 +351,14 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("clamps absurd paging parameters instead of failing")
     void clampsPagingParameters() {
-        ProcessPageDto huge = restTemplate.getForObject("/api/processes?size=100000", ProcessPageDto.class);
+        ProcessPageDto huge = client.getBody("/api/processes?size=100000", ProcessPageDto.class);
         assertThat(huge.size()).isEqualTo(100);
 
-        ProcessPageDto negative = restTemplate.getForObject("/api/processes?page=-5&size=0", ProcessPageDto.class);
+        ProcessPageDto negative = client.getBody("/api/processes?page=-5&size=0", ProcessPageDto.class);
         assertThat(negative.page()).isZero();
         assertThat(negative.size()).isEqualTo(1);
 
-        ProcessPageDto beyondEnd = restTemplate.getForObject("/api/processes?page=9999", ProcessPageDto.class);
+        ProcessPageDto beyondEnd = client.getBody("/api/processes?page=9999", ProcessPageDto.class);
         assertThat(beyondEnd.items()).isEmpty();
         assertThat(beyondEnd.hasNext()).isFalse();
     }
@@ -362,7 +366,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("rejects an unknown status value with 400")
     void rejectsUnknownStatus() {
-        assertThat(restTemplate.getForEntity("/api/processes?status=BANANA", String.class).getStatusCode())
+        assertThat(client.get("/api/processes?status=BANANA", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

@@ -1,5 +1,7 @@
 import type {
   AnalysisResult,
+  AuthResponse,
+  AuthUser,
   AnalysisRunTrace,
   Comparison,
   CreateProcessRequest,
@@ -26,6 +28,44 @@ export const API_BASE_URL = (
 /** Generous, because a free-tier backend may be cold and the model call itself takes ~10-40s. */
 const DEFAULT_TIMEOUT_MS = 60_000;
 const ANALYZE_TIMEOUT_MS = 240_000;
+
+/**
+ * The bearer token for the current session.
+ *
+ * Held in a module variable and mirrored to localStorage: the variable is what every request
+ * reads, so a sign-out takes effect immediately even for a request already in flight, while
+ * localStorage is what survives a page reload.
+ */
+const TOKEN_STORAGE_KEY = "afpd.token";
+let authToken: string | null = null;
+
+/** Called when a request comes back 401, so the app can send the user back to sign in. */
+let onUnauthorized: (() => void) | null = null;
+
+export const auth = {
+  setToken(token: string | null) {
+    authToken = token;
+    if (typeof window === "undefined") return;
+    if (token) {
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } else {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  },
+
+  /** Reads the stored token back after a reload. */
+  restoreToken(): string | null {
+    if (typeof window === "undefined") return null;
+    authToken = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    return authToken;
+  },
+
+  token: () => authToken,
+
+  onUnauthorized(handler: (() => void) | null) {
+    onUnauthorized = handler;
+  },
+};
 
 /** RFC 7807 problem document, as produced by GlobalExceptionHandler. */
 interface ProblemDetail {
@@ -67,6 +107,7 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFA
       headers: {
         Accept: "application/json",
         ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         ...init.headers,
       },
       signal: AbortSignal.timeout(timeoutMs),
@@ -104,6 +145,14 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFA
   if (!response.ok) {
     const problem: ProblemDetail =
       body && typeof body === "object" ? (body as ProblemDetail) : { title: response.statusText };
+
+    // An expired or invalid token: drop it and let the app show the sign-in screen, rather than
+    // leaving the user staring at a permission error they cannot act on.
+    if (response.status === 401 && !path.startsWith("/api/auth/")) {
+      auth.setToken(null);
+      onUnauthorized?.();
+    }
+
     throw new ApiError(response.status, problem, `Request failed with status ${response.status}.`);
   }
 
@@ -111,6 +160,14 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFA
 }
 
 export const api = {
+  register: (payload: { email: string; password: string; displayName?: string }) =>
+    request<AuthResponse>("/api/auth/register", { method: "POST", body: JSON.stringify(payload) }),
+
+  login: (payload: { email: string; password: string }) =>
+    request<AuthResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+
+  me: () => request<AuthUser>("/api/auth/me", {}, 15_000),
+
   listProcesses: (query: ProcessListQuery = {}) => {
     const params = new URLSearchParams();
     if (query.page != null) params.set("page", String(query.page));

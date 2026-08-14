@@ -358,7 +358,19 @@ function ProcessCard({ process }: { process: ProcessSummary }) {
           )}
         </div>
 
-        <p className="mt-1 text-xs text-ink-500">{process.industry}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
+          {process.industry}
+          {process.shared ? (
+            <span
+              className="rounded bg-ink-100 px-1.5 py-0.5 font-medium text-ink-600"
+              title="A shared sample: everyone can read and analyse it, nobody can edit or delete it"
+            >
+              Shared sample
+            </span>
+          ) : (
+            <span className="rounded bg-brand-50 px-1.5 py-0.5 font-medium text-brand-700">Yours</span>
+          )}
+        </p>
         <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-ink-600">
           {process.description}
         </p>

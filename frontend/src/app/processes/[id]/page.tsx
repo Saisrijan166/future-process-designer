@@ -150,7 +150,16 @@ export default function ProcessDetailPage() {
               ) : (
                 <Badge tone="neutral">Not analysed yet</Badge>
               )}
-              {process.origin === "USER" ? <Badge tone="info">Created here</Badge> : null}
+              {process.shared ? (
+                <Badge
+                  tone="neutral"
+                  title="A shared sample: everyone can read and analyse it, nobody can edit or delete it"
+                >
+                  Shared sample
+                </Badge>
+              ) : (
+                <Badge tone="accent">Yours</Badge>
+              )}
             </div>
             <p className="mt-1 text-sm text-ink-500">{process.industry}</p>
             <p className="mt-3 text-sm leading-relaxed text-ink-700">{process.description}</p>
@@ -171,14 +180,21 @@ export default function ProcessDetailPage() {
                 ? "Replaces the current result. Answers vary slightly each run."
                 : "Generates the AI ideas and the redesigned process. 5–30 seconds."}
             </p>
-            <button
-              type="button"
-              onClick={() => void handleDelete()}
-              disabled={deleting || analysing}
-              className="mt-1 text-left text-xs font-medium text-ink-500 transition-colors hover:text-rose-700 disabled:opacity-50"
-            >
-              {deleting ? "Deleting…" : "Delete this process"}
-            </button>
+            {process.shared ? (
+              <p className="mt-1 text-xs leading-relaxed text-ink-400">
+                This is a shared sample, so it cannot be edited or deleted. Analysing it updates it
+                for everyone.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={deleting || analysing}
+                className="mt-1 text-left text-xs font-medium text-ink-500 transition-colors hover:text-rose-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Delete this process"}
+              </button>
+            )}
           </div>
         </div>
       </header>

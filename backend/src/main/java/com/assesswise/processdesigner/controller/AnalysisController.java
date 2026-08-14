@@ -7,7 +7,10 @@ import com.assesswise.processdesigner.dto.ProcessDetailDto;
 import com.assesswise.processdesigner.exception.ResourceNotFoundException;
 import com.assesswise.processdesigner.mapper.DomainMapper;
 import com.assesswise.processdesigner.repository.AnalysisRunRepository;
+import com.assesswise.processdesigner.security.CurrentUser;
+import com.assesswise.processdesigner.security.CurrentUserService;
 import com.assesswise.processdesigner.service.AnalysisService;
+import com.assesswise.processdesigner.service.ProcessAccessService;
 import com.assesswise.processdesigner.service.ProcessService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,12 +34,20 @@ public class AnalysisController {
     private final AnalysisService analysisService;
     private final ProcessService processService;
     private final AnalysisRunReader runReader;
+    private final CurrentUserService currentUserService;
+    private final ProcessAccessService accessService;
 
     public AnalysisController(
-            AnalysisService analysisService, ProcessService processService, AnalysisRunReader runReader) {
+            AnalysisService analysisService,
+            ProcessService processService,
+            AnalysisRunReader runReader,
+            CurrentUserService currentUserService,
+            ProcessAccessService accessService) {
         this.analysisService = analysisService;
         this.processService = processService;
         this.runReader = runReader;
+        this.currentUserService = currentUserService;
+        this.accessService = accessService;
     }
 
     @PostMapping("/analyze")
@@ -45,8 +56,12 @@ public class AnalysisController {
                     + "with a repair prompt if needed) and replaces the stored future state. Safe to re-run: "
                     + "previously generated rows are cleared first.")
     public AnalysisResultDto analyze(@PathVariable UUID id) {
+        CurrentUser user = currentUserService.require();
+        // Analysing is a read-level action: your own processes and the shared samples.
+        accessService.requireReadable(id, user);
+
         AnalysisService.AnalysisOutcome outcome = analysisService.analyze(id);
-        ProcessDetailDto detail = processService.getDetail(id);
+        ProcessDetailDto detail = processService.getDetail(user, id);
         return new AnalysisResultDto(
                 id,
                 outcome.persisted().problems(),
@@ -61,6 +76,7 @@ public class AnalysisController {
     @Operation(summary = "Recent pipeline executions for this process")
     public List<AnalysisRunSummaryDto> runs(
             @PathVariable UUID id, @RequestParam(defaultValue = "10") int limit) {
+        accessService.requireReadable(id, currentUserService.require());
         return runReader.recentRuns(id, Math.clamp(limit, 1, 50));
     }
 
@@ -68,6 +84,7 @@ public class AnalysisController {
     @Operation(summary = "The exact prompt sent and the raw text the model returned",
             description = "The evidence that outputs are generated rather than hard-coded.")
     public AnalysisRunTraceDto latestTrace(@PathVariable UUID id) {
+        accessService.requireReadable(id, currentUserService.require());
         return runReader.latestTrace(id);
     }
 

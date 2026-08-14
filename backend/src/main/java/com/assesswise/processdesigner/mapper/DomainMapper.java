@@ -49,6 +49,7 @@ public class DomainMapper {
                 process.getDescription(),
                 process.getStatus(),
                 process.getOrigin(),
+                process.isSample(),
                 activityCount,
                 futureActivityCount,
                 opportunityCount,

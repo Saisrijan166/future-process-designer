@@ -24,6 +24,14 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # Session-token signing key. `generateValue` makes Render mint a random one
+      # on first deploy, so a real secret never lives in this file.
+      - key: AUTH_JWT_SECRET
+        generateValue: true
+      - key: AUTH_DEMO_ACCOUNT_ENABLED
+        value: "false"
       - key: APP_CORS_ALLOWED_ORIGINS
         sync: false
       - key: DATABASE_POOL_SIZE

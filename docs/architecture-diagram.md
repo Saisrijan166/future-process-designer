@@ -18,6 +18,9 @@ flowchart TB
         AC["AnalysisController<br/>analyze + run trace"]
         EC["EvidenceController"]
         LC["LookupController"]
+        AC2["AuthController<br/>register · login · me"]
+        SEC["SecurityFilterChain<br/>stateless JWT · BCrypt"]
+        ACC["ProcessAccessService<br/><i>the one place ownership is decided</i>"]
         GEH["GlobalExceptionHandler<br/>RFC 7807 problem details"]
     end
 
@@ -44,7 +47,11 @@ flowchart TB
         AUDIT[("AUDIT<br/>analysis_run<br/>analysis_run_snippet")]
     end
 
-    UI -->|"REST / JSON"| API
+    UI -->|"REST / JSON + Bearer token"| SEC
+    SEC --> API
+    AC2 --> DATA
+    PC --> ACC
+    AC --> ACC
     PC --> DATA
     EC --> KNOW
     LC --> DATA
@@ -69,7 +76,7 @@ flowchart TB
     classDef ext fill:#fdf2f8,stroke:#db2777,color:#500724
 
     class DASH,NEW,DETAIL,EVID ui
-    class PC,AC,EC,LC,GEH api
+    class PC,AC,AC2,SEC,ACC,EC,LC,GEH api
     class AS,KRS,PB,AP,FB,GP,GQ,PARSE,VAL,PERS ai
     class CUR,TRANS,FUT,KNOW,AUDIT data
     class GEMINI,GROQ ext
@@ -136,6 +143,8 @@ sequenceDiagram
 | Retrieval separate from prompting | Retrieval is deterministic and testable on its own; the prompt is text in a resource file. Neither needs the other to change. |
 | Parsing and validation separate from persistence | Nothing untrusted reaches the database. The validator emits a normalised structure, and persistence only ever writes that. |
 | Persistence in its own transactional bean | The model call takes tens of seconds and must not hold a database connection open — a real constraint on a serverless Postgres with a small connection allowance. |
+| Ownership decided in one service | Every route touching a single process calls `ProcessAccessService`, so read rules and write rules cannot drift apart between endpoints. It returns 404 rather than 403 for someone else's process, because a 403 would confirm the id exists. |
+| Stateless JWT rather than a session cookie | The frontend and API are on different sites (Vercel and Render). A session cookie would have to be `SameSite=None` third-party, which browsers increasingly block; a bearer token is unaffected. |
 | Audit trail as first-class tables | "Not hard-coded" is a claim; `analysis_run.prompt_text` and `analysis_run.raw_response` make it checkable. |
 
 ## Deployment topology

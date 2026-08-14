@@ -14,6 +14,13 @@ public interface AiOpportunityRepository extends JpaRepository<AiOpportunity, UU
     @EntityGraph(attributePaths = {"activity", "evidence"})
     List<AiOpportunity> findByProcessIdOrderByDisplayOrderAsc(UUID processId);
 
+    /** Counted for the dashboard, so it must respect the same visibility rule as the listing. */
+    @Query("""
+            select count(x) from AiOpportunity x
+            where x.process.owner.id = :ownerId or x.process.owner is null
+            """)
+    long countVisibleTo(@Param("ownerId") UUID ownerId);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from AiOpportunity o where o.process.id = :processId")
     int deleteByProcessId(@Param("processId") UUID processId);

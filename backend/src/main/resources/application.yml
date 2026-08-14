@@ -98,6 +98,19 @@ app:
       max-output-tokens: ${GROQ_MAX_OUTPUT_TOKENS:4096}
       structured-output: ${GROQ_STRUCTURED_OUTPUT:true}
 
+  auth:
+    # Signing key for session tokens. MUST be replaced in production — at least 32 characters.
+    #   openssl rand -base64 48
+    jwt-secret: ${AUTH_JWT_SECRET:dev-only-insecure-signing-key-change-me-in-production}
+    token-ttl-hours: ${AUTH_TOKEN_TTL_HOURS:12}
+    demo-account:
+      # Creates a known account on first start so the app can be opened without registering.
+      # Turn this off anywhere that is not a demo.
+      enabled: ${AUTH_DEMO_ACCOUNT_ENABLED:true}
+      email: ${AUTH_DEMO_EMAIL:demo@assesswise.test}
+      password: ${AUTH_DEMO_PASSWORD:demo12345}
+      display-name: ${AUTH_DEMO_DISPLAY_NAME:Demo User}
+
 logging:
   level:
     com.assesswise.processdesigner: ${LOG_LEVEL:INFO}

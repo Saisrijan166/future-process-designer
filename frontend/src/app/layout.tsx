@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { RequireAuth } from "@/components/require-auth";
 import { SiteHeader } from "@/components/site-header";
+import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,11 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        <SiteHeader />
+        <AuthProvider>
+          <SiteHeader />
 
-        <main id="main" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          {children}
-        </main>
+          <main id="main" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+            <RequireAuth>{children}</RequireAuth>
+          </main>
+        </AuthProvider>
 
         <footer className="mx-auto max-w-7xl px-4 pt-6 pb-12 sm:px-6 lg:px-8">
           <p className="border-t border-ink-200 pt-6 text-xs leading-relaxed text-ink-500">

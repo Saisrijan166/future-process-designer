@@ -13,6 +13,8 @@ public record ProcessSummaryDto(
         String description,
         ProcessStatus status,
         ProcessOrigin origin,
+        /** True when this is a shared sample: readable and analysable by all, editable by none. */
+        boolean shared,
         long activityCount,
         long futureActivityCount,
         long opportunityCount,

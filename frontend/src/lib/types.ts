@@ -20,6 +20,8 @@ export interface ProcessSummary {
   description: string;
   status: ProcessStatus;
   origin: ProcessOrigin;
+  /** A shared sample: everyone can read and analyse it, nobody can edit or delete it. */
+  shared: boolean;
   activityCount: number;
   futureActivityCount: number;
   opportunityCount: number;
@@ -201,6 +203,19 @@ export interface CreateProcessRequest {
   industry: string;
   description: string;
   activities: ActivityInput[];
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  expiresAt: string;
+  user: AuthUser;
 }
 
 export interface Role {

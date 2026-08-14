@@ -13,6 +13,7 @@ import com.assesswise.processdesigner.dto.CreateProcessRequest;
 import com.assesswise.processdesigner.dto.ProcessDetailDto;
 import com.assesswise.processdesigner.exception.AiProviderException;
 import com.assesswise.processdesigner.support.AbstractIntegrationTest;
+import com.assesswise.processdesigner.support.AuthenticatedClient;
 import com.assesswise.processdesigner.support.StubAiProvider;
 import java.util.List;
 import java.util.UUID;
@@ -45,9 +46,12 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    private AuthenticatedClient client;
+
     @BeforeEach
     void resetProvider() {
         aiProvider.reset();
+        client = AuthenticatedClient.register(restTemplate, "pipeline");
     }
 
     // A process from an industry the seed data knows nothing about: the "surprise record" case.
@@ -146,13 +150,13 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
 
     private UUID createProcess(String name) {
         ResponseEntity<ProcessDetailDto> created =
-                restTemplate.postForEntity("/api/processes", surpriseProcess(name), ProcessDetailDto.class);
+                client.post("/api/processes", surpriseProcess(name), ProcessDetailDto.class);
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return created.getBody().process().id();
     }
 
     private ResponseEntity<AnalysisResultDto> analyze(UUID processId) {
-        return restTemplate.postForEntity("/api/processes/" + processId + "/analyze", null, AnalysisResultDto.class);
+        return client.post("/api/processes/" + processId + "/analyze", null, AnalysisResultDto.class);
     }
 
     @Test
@@ -283,14 +287,14 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
         UUID processId = createProcess("Unrecoverable " + UUID.randomUUID());
 
         ResponseEntity<String> response =
-                restTemplate.postForEntity("/api/processes/" + processId + "/analyze", null, String.class);
+                client.post("/api/processes/" + processId + "/analyze", null, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(response.getBody()).contains("did not return a usable analysis");
 
         // The process is untouched and the failure is recorded rather than swallowed.
         ProcessDetailDto detail =
-                restTemplate.getForObject("/api/processes/" + processId, ProcessDetailDto.class);
+                client.getBody("/api/processes/" + processId, ProcessDetailDto.class);
         assertThat(detail.process().status()).isEqualTo(ProcessStatus.CURRENT_ONLY);
         assertThat(detail.futureActivities()).isEmpty();
         assertThat(detail.latestRun().status()).isEqualTo(AnalysisRunStatus.FAILED);
@@ -305,13 +309,13 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
         UUID processId = createProcess("Provider Down " + UUID.randomUUID());
 
         ResponseEntity<String> response =
-                restTemplate.postForEntity("/api/processes/" + processId + "/analyze", null, String.class);
+                client.post("/api/processes/" + processId + "/analyze", null, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
         assertThat(response.getBody()).contains("quota exceeded");
 
         ProcessDetailDto detail =
-                restTemplate.getForObject("/api/processes/" + processId, ProcessDetailDto.class);
+                client.getBody("/api/processes/" + processId, ProcessDetailDto.class);
         assertThat(detail.latestRun().status()).isEqualTo(AnalysisRunStatus.FAILED);
     }
 
@@ -323,7 +327,7 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
 
         analyze(processId);
 
-        var trace = restTemplate.getForObject(
+        var trace = client.getBody(
                 "/api/processes/" + processId + "/analysis-runs/latest/trace",
                 com.assesswise.processdesigner.dto.AnalysisRunTraceDto.class);
 
@@ -365,7 +369,7 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
         analyze(processId);
 
         ComparisonDto comparison =
-                restTemplate.getForObject("/api/processes/" + processId + "/comparison", ComparisonDto.class);
+                client.getBody("/api/processes/" + processId + "/comparison", ComparisonDto.class);
 
         assertThat(comparison.summary().currentActivityCount()).isEqualTo(4);
         assertThat(comparison.summary().futureActivityCount()).isEqualTo(4);
@@ -394,7 +398,7 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
         analyze(processId);
 
         ProcessDetailDto detail =
-                restTemplate.getForObject("/api/processes/" + processId, ProcessDetailDto.class);
+                client.getBody("/api/processes/" + processId, ProcessDetailDto.class);
         assertThat(detail.problems())
                 .filteredOn(problem -> problem.source() == ProblemSource.SEED)
                 .hasSize(1);
@@ -427,7 +431,7 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.update("delete from activity where process_id = ?", processId);
 
         ResponseEntity<String> response =
-                restTemplate.postForEntity("/api/processes/" + processId + "/analyze", null, String.class);
+                client.post("/api/processes/" + processId + "/analyze", null, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(response.getBody()).contains("no activities");
@@ -437,8 +441,8 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("returns 404 for an unknown process")
     void unknownProcess() {
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                "/api/processes/" + UUID.randomUUID() + "/analyze", null, String.class);
+        ResponseEntity<String> response =
+                client.post("/api/processes/" + UUID.randomUUID() + "/analyze", null, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }

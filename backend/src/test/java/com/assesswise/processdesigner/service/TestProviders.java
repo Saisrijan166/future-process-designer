@@ -15,6 +15,13 @@ public final class TestProviders {
         return new AppProperties.Gemini(apiKey, model, baseUrl, 0.2, 4096, 5, 10, true, -1, retries);
     }
 
+    public static AppProperties.Auth auth() {
+        return new AppProperties.Auth(
+                "test-only-signing-key-at-least-32-characters-long",
+                12,
+                new AppProperties.DemoAccount(false, "unused@example.test", "unused-password", "Unused"));
+    }
+
     public static AppProperties.Groq groq() {
         return groq("", "groq-test", "http://localhost", 1);
     }

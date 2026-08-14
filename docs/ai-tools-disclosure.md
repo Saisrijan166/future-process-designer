@@ -30,7 +30,7 @@ plan in `AI_FUTURE_PROCESS_DESIGNER_BUILD_PLAN.md`:
 - The REST controllers, DTOs, the RFC 7807 error handling and the configuration properties.
 - The prompt templates in `backend/src/main/resources/prompts/`.
 - The Next.js frontend in its entirety.
-- The 108 tests, including the integration suite that runs against a real PostgreSQL.
+- The 126 tests, including the integration suite that runs against a real PostgreSQL.
 - The Dockerfile, Render blueprint, CI workflow, and the documents in `docs/`.
 
 The AssessWise sample data — six processes, their activities, roles, systems and recorded pain
@@ -94,7 +94,7 @@ straightforward about the rest.*
 The repository is the evidence. Every claim above is checkable:
 
 ```bash
-cd backend && ./mvnw verify     # 108 tests, real PostgreSQL, real migrations
+cd backend && ./mvnw verify     # 126 tests, real PostgreSQL, real migrations
 git log --oneline               # the build history
 ```
 

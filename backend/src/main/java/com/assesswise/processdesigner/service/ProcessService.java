@@ -23,7 +23,9 @@ import com.assesswise.processdesigner.dto.RetrievedSnippetDto;
 import com.assesswise.processdesigner.dto.UpdateProcessRequest;
 import com.assesswise.processdesigner.exception.ResourceNotFoundException;
 import com.assesswise.processdesigner.mapper.DomainMapper;
+import com.assesswise.processdesigner.security.CurrentUser;
 import com.assesswise.processdesigner.repository.ActivityRepository;
+import com.assesswise.processdesigner.repository.AppUserRepository;
 import com.assesswise.processdesigner.repository.AiInterventionRepository;
 import com.assesswise.processdesigner.repository.AiOpportunityRepository;
 import com.assesswise.processdesigner.repository.AnalysisRunRepository;
@@ -66,6 +68,8 @@ public class ProcessService {
     private final AnalysisRunRepository analysisRunRepository;
     private final RoleRepository roleRepository;
     private final SystemToolRepository systemToolRepository;
+    private final AppUserRepository userRepository;
+    private final ProcessAccessService accessService;
     private final DomainMapper mapper;
 
     public ProcessService(
@@ -78,6 +82,8 @@ public class ProcessService {
             AnalysisRunRepository analysisRunRepository,
             RoleRepository roleRepository,
             SystemToolRepository systemToolRepository,
+            AppUserRepository userRepository,
+            ProcessAccessService accessService,
             DomainMapper mapper) {
         this.processRepository = processRepository;
         this.activityRepository = activityRepository;
@@ -88,6 +94,8 @@ public class ProcessService {
         this.analysisRunRepository = analysisRunRepository;
         this.roleRepository = roleRepository;
         this.systemToolRepository = systemToolRepository;
+        this.userRepository = userRepository;
+        this.accessService = accessService;
         this.mapper = mapper;
     }
 
@@ -101,7 +109,8 @@ public class ProcessService {
     private static final int MAX_PAGE_SIZE = 100;
 
     @Transactional(readOnly = true)
-    public ProcessPageDto listProcesses(int page, int size, ProcessStatus status, String search, String sort) {
+    public ProcessPageDto listProcesses(
+            CurrentUser user, int page, int size, ProcessStatus status, String search, String sort) {
         int safePage = Math.max(0, page);
         int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(safePage, safeSize, SORTS.getOrDefault(sort, SORTS.get("recent")));
@@ -113,7 +122,7 @@ public class ProcessService {
                 : "%" + search.trim().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
 
         Page<ProcessSummaryDto> result =
-                processRepository.findSummaryPage(status, normalisedSearch, pageable);
+                processRepository.findSummaryPage(user.id(), status, normalisedSearch, pageable);
 
         return new ProcessPageDto(
                 result.getContent(),
@@ -123,24 +132,26 @@ public class ProcessService {
                 result.getTotalPages(),
                 result.hasPrevious(),
                 result.hasNext(),
-                datasetStats());
+                visibleStats(user));
     }
 
     /**
-     * Totals across every process, independent of the page and the filter — these are the headline
-     * numbers, and they should not move when the user searches.
+     * Totals across everything this user can see — their own work plus the shared samples —
+     * independent of the current page and filter, so the headline numbers do not move while
+     * searching. Scoped to the caller: one user's counts must never include another's work.
      */
-    private ProcessPageDto.Stats datasetStats() {
+    private ProcessPageDto.Stats visibleStats(CurrentUser user) {
         return new ProcessPageDto.Stats(
-                processRepository.count(),
-                processRepository.countByStatus(ProcessStatus.ANALYZED),
-                opportunityRepository.count(),
-                futureActivityRepository.count());
+                processRepository.countVisibleTo(user.id()),
+                processRepository.countVisibleToByStatus(user.id(), ProcessStatus.ANALYZED),
+                opportunityRepository.countVisibleTo(user.id()),
+                futureActivityRepository.countVisibleTo(user.id()));
     }
 
     @Transactional
-    public ProcessDetailDto create(CreateProcessRequest request) {
+    public ProcessDetailDto create(CurrentUser user, CreateProcessRequest request) {
         BusinessProcess process = new BusinessProcess();
+        process.setOwner(userRepository.getReferenceById(user.id()));
         process.setName(request.name().trim());
         process.setIndustry(request.industry().trim());
         process.setDescription(request.description().trim());
@@ -150,9 +161,9 @@ public class ProcessService {
 
         saveActivities(saved, request.activities());
 
-        log.info("Created process '{}' ({}) with {} activities",
-                saved.getName(), saved.getId(), request.activities().size());
-        return getDetail(saved.getId());
+        log.info("Created process '{}' ({}) for {} with {} activities",
+                saved.getName(), saved.getId(), user.email(), request.activities().size());
+        return getDetail(user, saved.getId());
     }
 
     /**
@@ -161,10 +172,8 @@ public class ProcessService {
      * than left to look current.
      */
     @Transactional
-    public ProcessDetailDto update(UUID processId, UpdateProcessRequest request) {
-        if (!processRepository.existsById(processId)) {
-            throw ResourceNotFoundException.of("Process", processId);
-        }
+    public ProcessDetailDto update(CurrentUser user, UUID processId, UpdateProcessRequest request) {
+        accessService.requireWritable(processId, user);
 
         // Clear derived state first. These are bulk deletes that detach the persistence context,
         // so the process entity is loaded afterwards rather than before.
@@ -187,22 +196,20 @@ public class ProcessService {
         saveActivities(process, request.activities());
 
         log.info("Updated process '{}' ({}); previous analysis cleared", process.getName(), processId);
-        return getDetail(processId);
+        return getDetail(user, processId);
     }
 
     @Transactional
-    public void delete(UUID processId) {
-        BusinessProcess process = processRepository.findById(processId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Process", processId));
+    public void delete(CurrentUser user, UUID processId) {
+        BusinessProcess process = accessService.requireWritable(processId, user);
         // Every child table declares ON DELETE CASCADE, so one delete is enough and cannot orphan rows.
         processRepository.delete(process);
         log.info("Deleted process '{}' ({})", process.getName(), processId);
     }
 
     @Transactional(readOnly = true)
-    public ProcessDetailDto getDetail(UUID processId) {
-        BusinessProcess process = processRepository.findById(processId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Process", processId));
+    public ProcessDetailDto getDetail(CurrentUser user, UUID processId) {
+        BusinessProcess process = accessService.requireReadable(processId, user);
 
         List<Activity> activities =
                 activityRepository.findWithRelationsByProcessIdOrderBySequenceOrderAsc(processId);
@@ -250,8 +257,8 @@ public class ProcessService {
      * here is computed from stored rows, which is the whole point: the future process is data.
      */
     @Transactional(readOnly = true)
-    public ComparisonDto getComparison(UUID processId) {
-        ProcessDetailDto detail = getDetail(processId);
+    public ComparisonDto getComparison(CurrentUser user, UUID processId) {
+        ProcessDetailDto detail = getDetail(user, processId);
 
         Set<String> roles = new LinkedHashSet<>();
         Set<String> systems = new LinkedHashSet<>();

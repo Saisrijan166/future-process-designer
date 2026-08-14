@@ -4,10 +4,13 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
@@ -64,6 +67,25 @@ public class BusinessProcess {
 
     @Column(name = "last_analyzed_at")
     private Instant lastAnalyzedAt;
+
+    /**
+     * The account this belongs to, or {@code null} for a shared sample.
+     *
+     * <p>Null is the meaningful value here, not an accident: the six seeded processes are owned by
+     * nobody, visible to everyone, analysable by anyone and editable by no one.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private AppUser owner;
+
+    /** A shared sample rather than someone's private work. */
+    public boolean isSample() {
+        return owner == null;
+    }
+
+    public boolean isOwnedBy(UUID userId) {
+        return owner != null && owner.getId().equals(userId);
+    }
 
     @OneToMany(mappedBy = "process", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sequenceOrder ASC")

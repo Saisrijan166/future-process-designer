@@ -2,6 +2,7 @@
 
 ## Before you start
 
+- [ ] Sign in before you present — `demo@assesswise.test` / `demo12345`, or your own account.
 - [ ] Open the Vercel URL **2–3 minutes early** so the free Render backend wakes up. Cold start is
       about a minute. Confirm the dashboard lists six processes.
 - [ ] Check the Gemini free-tier quota has headroom — you will make 2–3 calls during the demo.
@@ -37,12 +38,27 @@ Open [`docs/architecture-diagram.md`](architecture-diagram.md).
 
 On the fallback question — answer it before it's asked:
 
-> "If Gemini's free tier went away tomorrow: the model call sits behind a single `AiProvider`
-> interface with one implementation. Swapping to Groq's free tier or a local Ollama model is a new
-> class and a config value — the pipeline, the schema and the UI don't change.
+> "If Gemini's free tier went away tomorrow — it did, actually, mid-build, at twenty requests a day.
+> So there are two providers now: Gemini first, Groq behind it. If the first one refuses, the second
+> answers, and the result page says plainly which one produced the analysis and why the other was
+> passed over.
 >
-> I deliberately did not build a second live provider or automatic failover. The brief asks for that
-> risk to be explained, not engineered around, and that time went into the pipeline instead."
+> The point worth making is not that there are two. It's that adding the second cost one class and a
+> config value, because the model call already sat behind a single `AiProvider` interface. A local
+> Ollama model would be the same amount of work."
+
+---
+
+## 2b · Accounts, in fifteen seconds (optional but cheap)
+
+Worth doing if you have a second browser window open — it answers the "is this shared?" question
+before anyone has to ask it.
+
+> "Everything I create here is private to my account. The six samples are shared with everyone —
+> anyone can analyse them, nobody can delete them, so a demo can't be broken by whoever is clicking."
+
+If challenged, sign in as a second account in a private window: your own processes are simply not
+there, and asking for one by its id returns a 404 rather than a 403, so the ids can't be probed.
 
 ---
 
@@ -167,10 +183,11 @@ If you have a spare 20 seconds, press **Re-run analysis**:
 
 ## 7 · Close (1 min)
 
-> "What I'd add next: authentication and multi-tenant organisations; embeddings instead of keyword
-> matching once the corpus grows past a few dozen sources; versioned prompts so two runs can be
-> compared side by side; and a review step so a human accepts or rejects each opportunity before it
-> becomes the stored future state.
+> "What I'd add next: team workspaces, so colleagues share a set of processes rather than one
+> account per person; password reset and email verification; embeddings instead of keyword matching
+> once the corpus grows past a few dozen sources; versioned prompts so two runs can be compared side
+> by side; and a review step so a human accepts or rejects each opportunity before it becomes the
+> stored future state.
 >
 > What I'd want you to take away is the surprise-record test. The seed data is there to make the
 > demo concrete. The pipeline doesn't know it exists."
@@ -199,9 +216,17 @@ Nothing. Free tiers throughout. The cost of a single analysis on Gemini Flash pr
 fraction of a rupee if it were paid.
 
 **"Could this handle our real processes?"**
-As it stands: one tenant, no auth, no access control — so not with real customer data. That's the
-first thing Phase 2 addresses. The pipeline and data model themselves are industry-agnostic, which
-is what the live test just demonstrated.
+Each account's processes are private: another signed-in user cannot list, search, read, analyse or
+delete them, and asking by id returns 404 rather than 403 so ids cannot be probed. What is not there
+yet is team workspaces, password reset, and an audit of who changed what — so for real customer data
+I would want Phase 2 first. The pipeline and data model are industry-agnostic, which is what the
+live test just demonstrated.
+
+**"What can other people see?"**
+The six samples are shared with everyone and analysable by anyone, but editable or deletable by
+nobody — so a demo cannot be broken by whoever is clicking. Everything you create is yours alone,
+and I am happy to show it: sign in as a second account in a private window and watch my process not
+be there.
 
 **"Why Gemini?"**
 A genuinely usable free tier, and native structured-output support so the response conforms to a
