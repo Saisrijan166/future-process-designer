@@ -52,7 +52,7 @@ flowchart TB
     AS --> PB
     AS --> AP
     AP -.->|"the only seam to a model"| GP
-    GP -->|"HTTPS"| GEMINI(["Google AI Studio<br/>gemini-2.5-flash · free tier"])
+    GP -->|"HTTPS"| GEMINI(["Google AI Studio<br/>gemini-3.7-flash · free tier"])
     AS --> PARSE --> VAL --> PERS
     PERS --> CUR & TRANS & FUT
     AS --> AUDIT

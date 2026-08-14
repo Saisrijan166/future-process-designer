@@ -13,7 +13,7 @@ Versions below are the ones resolved by the committed `pom.xml` and `package-loc
 
 | Service | Used for | Plan | Licence / terms | If it stopped being free |
 |---|---|---|---|---|
-| **Google AI Studio (Gemini API)** | The one live AI provider — `gemini-2.5-flash` | Free tier | [Gemini API terms](https://ai.google.dev/gemini-api/terms); free tier has per-minute and per-day request limits | The model call sits behind a single `AiProvider` interface. Swapping to Groq's free tier, an OpenAI-compatible endpoint, or a locally-run Ollama model is one new class plus `AI_PROVIDER=<name>` — no change to the pipeline, the schema or the UI. Deliberately **not** implemented: no second live provider and no runtime failover ship, because the brief asks for this risk to be explained, not engineered around. |
+| **Google AI Studio (Gemini API)** | The one live AI provider — `gemini-3.7-flash` | Free tier | [Gemini API terms](https://ai.google.dev/gemini-api/terms); free tier has per-minute and per-day request limits | The model call sits behind a single `AiProvider` interface. Swapping to Groq's free tier, an OpenAI-compatible endpoint, or a locally-run Ollama model is one new class plus `AI_PROVIDER=<name>` — no change to the pipeline, the schema or the UI. Deliberately **not** implemented: no second live provider and no runtime failover ship, because the brief asks for this risk to be explained, not engineered around. |
 | **Neon** | PostgreSQL (serverless) | Free tier | Free plan, no card required | Any PostgreSQL 13+ works. Supabase's free tier is a drop-in: change `DATABASE_URL`. The schema uses no Neon-specific features. |
 | **Render** | Backend hosting (Docker web service) | Free | Free plan; instance sleeps after 15 min idle, ~50s cold start | The deployable is a plain Spring Boot jar in a standard Dockerfile — Fly.io, Railway, Koyeb or any container host takes it unchanged. |
 | **Vercel** | Frontend hosting | Free hobby | Hobby plan | A stock Next.js app; Netlify or Cloudflare Pages deploy it with no code change, or `next build && next start` on any Node host. |
@@ -22,11 +22,23 @@ Versions below are the ones resolved by the committed `pom.xml` and `package-loc
 
 | Model | Provider | Version pinned | Cost |
 |---|---|---|---|
-| `gemini-2.5-flash` | Google | Configurable via `GEMINI_MODEL` | Free tier |
+| `gemini-3.7-flash` | Google | Configurable via `GEMINI_MODEL` | Free tier |
 
-Chosen over the `gemini-1.5-flash` named in the original plan because 1.5 Flash is no longer the
-current free-tier default; 2.5 Flash is its successor, is available on the free tier, and supports
-the structured-output response schema the pipeline uses. The model id is configuration, not code.
+The original plan named `gemini-1.5-flash`. That model is retired. `gemini-2.5-flash` was tried
+next and **also failed** — it is still returned by the `models` endpoint, but calling it with a
+newly-issued key gives *"no longer available to new users"*. `gemini-3.7-flash` was then verified
+by an actual `generateContent` call, with the structured-output response schema this pipeline sends,
+on 14-08-2026.
+
+The lesson, worth stating because it will happen again: **pin a model you have actually called, not
+one a document recommends.** Free-tier model availability changes without notice and the model
+listing endpoint is not a reliable guide to what a given key may use. The model id is configuration
+(`GEMINI_MODEL`), so this is a dashboard edit rather than a redeploy of code. `gemini-flash-latest`
+is an alias that auto-follows the newest Flash model — more resilient, at the cost of the output
+changing under you between demos.
+
+Other models verified working with this pipeline's request shape on the same date:
+`gemini-flash-latest`, `gemini-3.5-flash-lite`.
 
 ---
 

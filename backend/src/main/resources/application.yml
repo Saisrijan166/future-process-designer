@@ -81,7 +81,7 @@ app:
     provider: ${AI_PROVIDER:gemini}
     gemini:
       api-key: ${GEMINI_API_KEY:}
-      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      model: ${GEMINI_MODEL:gemini-3.7-flash}
       temperature: ${GEMINI_TEMPERATURE:0.2}
       max-output-tokens: ${GEMINI_MAX_OUTPUT_TOKENS:8192}
       structured-output: ${GEMINI_STRUCTURED_OUTPUT:true}

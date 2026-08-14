@@ -44,7 +44,7 @@ public record AppProperties(
     public record Gemini(
             /** Google AI Studio API key. Never commit this; supply via GEMINI_API_KEY. */
             @DefaultValue("") String apiKey,
-            @DefaultValue("gemini-2.5-flash") String model,
+            @DefaultValue("gemini-3.7-flash") String model,
             @DefaultValue("https://generativelanguage.googleapis.com/v1beta") String baseUrl,
             @DefaultValue("0.2") double temperature,
             @DefaultValue("8192") int maxOutputTokens,

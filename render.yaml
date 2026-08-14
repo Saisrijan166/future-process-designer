@@ -29,4 +29,4 @@ services:
       - key: DATABASE_POOL_SIZE
         value: "3"
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.7-flash

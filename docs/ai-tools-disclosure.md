@@ -11,7 +11,7 @@
 | Tool | Model | What it was used for |
 |---|---|---|
 | **Claude Code** (Anthropic) | Claude Opus 4.5 | Writing the implementation: Java source, SQL migrations, React/TypeScript components, tests, configuration and this documentation |
-| **Google Gemini** | `gemini-2.5-flash` | Not a build tool — it is the AI capability *inside* the shipped product, called at runtime by the analysis pipeline |
+| **Google Gemini** | `gemini-3.7-flash` | Not a build tool — it is the AI capability *inside* the shipped product, called at runtime by the analysis pipeline |
 
 No other code-generation tool was used. No code was copied from an existing project of mine or from
 a public repository; the application was built from scratch during this effort, on top of the
@@ -51,9 +51,11 @@ These are recorded because they are the honest texture of building this way:
 - **A stemmer that didn't collide the forms it needed to.** "grading" and "grade" produced different
   tokens, so keyword retrieval missed obvious matches. Found by a unit test written to assert the
   property rather than the implementation.
-- **The initial model choice.** The build plan specified `gemini-1.5-flash`; that is no longer the
-  current free-tier default, so the default became `gemini-2.5-flash` — and the model id became
-  configuration rather than a constant.
+- **Two dead model ids before a working one.** The build plan specified `gemini-1.5-flash`, which
+  is retired. The replacement chosen from knowledge of the API, `gemini-2.5-flash`, is still listed
+  by the models endpoint but rejects newly-issued keys outright. Only `gemini-3.7-flash` was
+  confirmed by making a real call. Nothing about model availability was taken on trust, and the
+  model id is configuration rather than a constant precisely because this keeps happening.
 - **Source URLs were verified, not assumed.** Every one of the 16 research URLs was fetched and
   checked to return HTTP 200 before being written into the seed data. Several plausible-looking
   candidates were discarded because they 404'd or blocked access.

@@ -17,7 +17,7 @@ Current activities  →  Problems  →  AI opportunities  →  Future activities
 | **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind 4 — deployed on Vercel |
 | **Backend** | Spring Boot 3.5 · Java 21 — deployed on Render |
 | **Database** | PostgreSQL 16 — Neon serverless |
-| **AI** | Google Gemini `gemini-2.5-flash` via the free AI Studio API |
+| **AI** | Google Gemini `gemini-3.7-flash` via the free AI Studio API |
 | **Cost to run** | Nothing. Every service is free-tier or open source — see [LIBRARIES.md](LIBRARIES.md) |
 
 **Live URLs** — fill these in after deploying:
@@ -68,36 +68,34 @@ Maven is not required — the repo ships the Maven wrapper.
 
 ### 1. Start PostgreSQL
 
+With Docker:
+
 ```bash
 docker compose up -d          # postgres:16 on localhost:5432, db "future_designer"
 ```
 
-<details>
-<summary>No Docker? Run a throwaway Postgres in your home directory</summary>
+Without Docker or root — this creates a cluster in your home directory on port 55432, which is
+what `backend/.env.example` points at by default:
 
 ```bash
-# Needs the postgres server binaries installed (e.g. apt install postgresql), but no root.
-export PGDATA=/tmp/fd-pgdata
-initdb -D "$PGDATA" -U postgres --auth=trust
-pg_ctl -D "$PGDATA" -o "-p 5432" -l "$PGDATA/server.log" start
-createdb -h localhost -U postgres future_designer
+./scripts/local-db.sh start   # also: stop | status | psql | reset
 ```
-</details>
 
-Any PostgreSQL 13 or newer works. The schema needs no extensions.
+Any PostgreSQL 13 or newer works either way. The schema needs no extensions.
 
 ### 2. Start the backend
 
 ```bash
 cd backend
-cp .env.example .env          # then put your Gemini key in it
+cp .env.example .env          # then put your Gemini key in GEMINI_API_KEY
+./run-local.sh                # loads .env and starts the app
+```
 
-export DATABASE_URL=jdbc:postgresql://localhost:5432/future_designer
-export DATABASE_USERNAME=postgres
-export DATABASE_PASSWORD=postgres
-export GEMINI_API_KEY=your-key-here
+`run-local.sh` exists because Spring Boot does not read `.env` files by itself. If you would rather
+not use it:
 
-./mvnw spring-boot:run
+```bash
+set -a; source .env; set +a; ./mvnw spring-boot:run
 ```
 
 Flyway creates the schema and loads the sample data on first start — there are no manual SQL steps.
@@ -111,7 +109,7 @@ The service is up when <http://localhost:8080/actuator/health> returns `{"status
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local    # defaults to http://localhost:8080
+cp .env.example .env.local    # defaults to http://localhost:8080 — Next.js reads this automatically
 npm run dev
 ```
 
@@ -245,13 +243,32 @@ Every knob is an environment variable; nothing needs a code change. Full list wi
 | `DATABASE_URL` / `DATABASE_USERNAME` / `DATABASE_PASSWORD` | local Postgres | Connection |
 | `DATABASE_POOL_SIZE` | `5` | Keep small on Neon's free tier |
 | `GEMINI_API_KEY` | *(empty)* | Required for `/analyze`; absent means a clear 503 |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Any model your key can reach |
+| `GEMINI_MODEL` | `gemini-3.7-flash` | Any model your key can reach — see the warning below |
 | `GEMINI_STRUCTURED_OUTPUT` | `true` | Server-side response schema. Validation and repair still run either way |
 | `GEMINI_THINKING_BUDGET` | `-1` | `-1` keeps the model default; `0` disables thinking for a faster demo |
 | `ANALYSIS_SNIPPET_COUNT` | `4` | Grounding snippets injected per analysis |
 | `ANALYSIS_RATE_LIMIT_PER_MINUTE` | `20` | Protects the free AI quota from a double-clicked button |
 | `APP_CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated frontend origins |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | Frontend → backend (frontend build/runtime) |
+
+### A warning about model ids
+
+Free-tier Gemini model availability changes without notice, and **the `models` listing endpoint is
+not a reliable guide to what your key may actually call**. `gemini-2.5-flash` is still listed but
+returns *"no longer available to new users"* for a newly-issued key. `gemini-3.7-flash` is the
+default here because it was verified with a real request on 14-08-2026.
+
+If `Analyze` returns a `502` mentioning the model was not found, check what your key can reach and
+set `GEMINI_MODEL` accordingly — no code change, no redeploy of the image:
+
+```bash
+curl -s https://generativelanguage.googleapis.com/v1beta/models \
+  -H "x-goog-api-key: $GEMINI_API_KEY" \
+  | grep -o '"name": "models/[^"]*"'
+```
+
+`gemini-flash-latest` is an alias that follows the newest Flash model — more resilient to retirement,
+at the cost of output changing between runs.
 
 ---
 
