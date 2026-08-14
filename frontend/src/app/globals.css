@@ -1,11 +1,23 @@
 @import "tailwindcss";
 
 /*
- * A single, deliberately restrained light theme. This is a judged engineering artifact, so the
- * visual job is to make structure legible — current vs future, human vs AI, evidence vs claim —
- * not to be a design showcase.
+ * Design tokens.
+ *
+ * Colour is split by JOB, so nothing has to be guessed at a glance:
+ *   ink      — surfaces, borders, text
+ *   brand    — navigation and links only
+ *   action   — primary buttons are near-black, so no accent hue competes with data
+ *   viz      — data marks only. Two ordinal ramps, both validated against a white
+ *              surface (monotone lightness, ≥0.06 ΔL between steps, light end ≥2:1).
+ *   status   — good / warning / serious / critical, never reused as a data series,
+ *              and always paired with a text label so colour never carries meaning alone.
+ *
+ * The two data ramps are one hue each, light→dark, because both scales they encode
+ * are ordered: human→AI involvement, and low→high automation potential. Two
+ * sequential contexts appear together, so the second takes a different hue.
  */
 @theme {
+  /* ---- neutrals ---- */
   --color-ink-50: #f8fafc;
   --color-ink-100: #f1f5f9;
   --color-ink-200: #e2e8f0;
@@ -16,27 +28,64 @@
   --color-ink-700: #334155;
   --color-ink-800: #1e293b;
   --color-ink-900: #0f172a;
+  --color-ink-950: #020617;
 
+  /* ---- brand: navigation, links, focus. Never a data mark. ---- */
   --color-brand-50: #eef2ff;
   --color-brand-100: #e0e7ff;
   --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
   --color-brand-500: #6366f1;
   --color-brand-600: #4f46e5;
   --color-brand-700: #4338ca;
+  --color-brand-900: #312e81;
+
+  /* ---- viz: human → AI spectrum (blue ordinal, validated) ---- */
+  --color-viz-human: #86b6ef;
+  --color-viz-augmented: #2a78d6;
+  --color-viz-automated: #104281;
+  --color-viz-human-wash: #eaf2fd;
+  --color-viz-automated-wash: #e3ecf8;
+
+  /* ---- viz: automation potential (orange ordinal, validated) ---- */
+  --color-viz-auto-low: #e39158;
+  --color-viz-auto-medium: #d2621f;
+  --color-viz-auto-high: #8f3810;
+  --color-viz-auto-track: #f6e6da;
+
+  /* ---- status: always shipped with a label ---- */
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
+  --color-status-good-ink: #046004;
+  --color-status-warning-ink: #7a5300;
+  --color-status-critical-ink: #8f1f1f;
+
+  /* ---- chart chrome ---- */
+  --color-grid: #e2e8f0;
+  --color-muted-ink: #64748b;
+
+  --radius-card: 0.75rem;
 }
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 
 body {
   background-color: var(--color-ink-50);
   color: var(--color-ink-800);
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-/* Respect a reduced-motion preference for the spinner and transitions. */
+/* Numbers that sit in columns must align; standalone display figures must not. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -47,9 +96,38 @@ body {
   }
 }
 
-/* Consistent focus ring for keyboard users across buttons, links and inputs. */
 :focus-visible {
   outline: 2px solid var(--color-brand-600);
   outline-offset: 2px;
-  border-radius: 0.25rem;
+  border-radius: 0.375rem;
+}
+
+/* A quiet entrance for content that arrives after a fetch, so results do not snap in. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.28s ease-out both;
+}
+
+/* Indeterminate progress for the analysis run. */
+@keyframes sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.animate-sweep {
+  animation: sweep 1.6s ease-in-out infinite;
 }

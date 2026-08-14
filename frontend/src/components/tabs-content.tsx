@@ -1,12 +1,8 @@
-import { Badge, Card, EmptyState, SectionHeading, Text } from "@/components/ui";
+import { CurrentFlow, FutureFlow } from "@/components/process-flow";
 import { SnippetCard } from "@/components/snippet-card";
-import {
-  automationTone,
-  humanise,
-  interventionTone,
-  responsibilityTone,
-  severityTone,
-} from "@/lib/format";
+import { Badge, Card, EmptyState, SectionHeading } from "@/components/ui";
+import { AutomationMeter, RelevanceMeter } from "@/components/viz";
+import { humanise, interventionTone, severityTone } from "@/lib/format";
 import type {
   Activity,
   AiIntervention,
@@ -28,100 +24,29 @@ export function CurrentTab({
   const processWideProblems = problems.filter((problem) => !problem.activityId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section>
         <SectionHeading
           title="How it runs today"
-          description="Each step of the current process, who performs it, which systems it touches, and what goes wrong."
+          description="Each step in order, who performs it, which systems it touches, and what goes wrong."
         />
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-4xl border-collapse text-left text-sm">
-              <thead className="border-b border-ink-200 bg-ink-50 text-xs tracking-wide text-ink-600 uppercase">
-                <tr>
-                  <th scope="col" className="w-12 px-4 py-3 font-semibold">#</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Activity</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Roles</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Systems</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Problems</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-100 align-top">
-                {activities.map((activity) => (
-                  <tr key={activity.id}>
-                    <td className="px-4 py-3 tabular-nums text-ink-400">{activity.sequenceOrder}</td>
-                    <th scope="row" className="max-w-sm px-4 py-3 text-left font-normal">
-                      <p className="font-medium text-ink-900">{activity.name}</p>
-                      {activity.description ? (
-                        <p className="mt-1 text-xs leading-relaxed text-ink-600">
-                          {activity.description}
-                        </p>
-                      ) : null}
-                    </th>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {activity.roles.length > 0 ? (
-                          activity.roles.map((role) => (
-                            <Badge key={role} tone="neutral">
-                              {role}
-                            </Badge>
-                          ))
-                        ) : (
-                          <span className="text-xs text-ink-400">Not recorded</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {activity.systems.length > 0 ? (
-                          activity.systems.map((system) => (
-                            <Badge key={system} tone="info">
-                              {system}
-                            </Badge>
-                          ))
-                        ) : (
-                          <span className="text-xs text-ink-400">Not recorded</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="max-w-sm px-4 py-3">
-                      {activity.problems.length > 0 ? (
-                        <ul className="space-y-1.5">
-                          {activity.problems.map((problem) => (
-                            <li key={problem.id} className="flex gap-2">
-                              <Badge tone={severityTone[problem.severity]}>{problem.severity}</Badge>
-                              <span className="text-xs leading-relaxed text-ink-700">
-                                {problem.description}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <span className="text-xs text-ink-400">None</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <CurrentFlow activities={activities} />
       </section>
 
       {processWideProblems.length > 0 ? (
         <section>
           <SectionHeading
-            title="Process-wide problems"
-            description="Pain points that span the whole process rather than one step."
+            title="Problems across the whole process"
+            description="Pain points that are not tied to one particular step."
           />
           <ul className="space-y-2">
             {processWideProblems.map((problem) => (
-              <Card as="li" key={problem.id} className="flex items-start gap-3 p-3">
-                <Badge tone={severityTone[problem.severity]}>{problem.severity}</Badge>
-                <p className="text-sm text-ink-700">{problem.description}</p>
+              <Card as="li" key={problem.id} className="flex flex-wrap items-start gap-3 p-3">
+                <Badge tone={severityTone[problem.severity]}>{humanise(problem.severity)}</Badge>
+                <p className="flex-1 text-sm text-ink-700">{problem.description}</p>
                 {problem.source === "AI_GENERATED" ? (
-                  <Badge tone="accent" title="Identified by the analysis pipeline">
-                    AI-identified
+                  <Badge tone="accent" title="Spotted by the analysis, not recorded in advance">
+                    Found by AI
                   </Badge>
                 ) : null}
               </Card>
@@ -148,59 +73,46 @@ export function TransitionTab({ opportunities }: { opportunities: AiOpportunity[
   return (
     <div className="space-y-4">
       <SectionHeading
-        title={`Where AI could help (${opportunities.length} ideas)`}
-        description="Each one names the specific AI capability, what the business gains, what could go wrong, why it follows from this process, and which research sources back it up."
+        title={`Where AI could help — ${opportunities.length} ideas`}
+        description="Each idea names the specific capability, what the business gains, what could go wrong, why it follows from this process, and which research backs it up."
       />
       <ol className="space-y-4">
         {opportunities.map((opportunity, index) => (
-          <Card as="li" key={opportunity.id} className="p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex gap-3">
-                <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">
+          <Card as="li" key={opportunity.id} className="overflow-hidden">
+            <div className="grid gap-3 p-5 pb-4 sm:grid-cols-[1fr_auto] sm:items-start">
+              <div className="flex min-w-0 gap-3">
+                <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-viz-automated-wash text-xs font-semibold text-viz-augmented">
                   {index + 1}
                 </span>
-                <div>
-                  <h3 className="text-sm font-semibold text-ink-900">{opportunity.description}</h3>
-                  <p className="mt-1 text-xs text-ink-500">
-                    Capability: <span className="text-ink-700">{opportunity.aiCapability}</span>
+                <div className="min-w-0">
+                  <h3 className="text-sm leading-snug font-semibold text-ink-900">
+                    {opportunity.description}
+                  </h3>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
+                    <span className="rounded-md bg-ink-100 px-1.5 py-0.5 font-medium text-ink-700">
+                      {opportunity.aiCapability}
+                    </span>
                     {opportunity.activityName ? (
-                      <>
-                        {" · "}Targets: <span className="text-ink-700">{opportunity.activityName}</span>
-                      </>
+                      <>applied to “{opportunity.activityName}”</>
                     ) : (
-                      <>{" · "}Applies to the whole process</>
+                      <>applies to the whole process</>
                     )}
                   </p>
                 </div>
               </div>
-              <Badge tone={automationTone[opportunity.automationPotential]}>
-                {humanise(opportunity.automationPotential)} automation potential
-              </Badge>
+              <div className="sm:pt-0.5">
+                <AutomationMeter level={opportunity.automationPotential} />
+              </div>
             </div>
 
-            <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-emerald-50/60 p-3">
-                <dt className="text-xs font-semibold text-emerald-900">Business benefit</dt>
-                <dd className="mt-1 text-xs leading-relaxed text-ink-700">
-                  <Text value={opportunity.businessBenefit} fallback="Not stated" />
-                </dd>
-              </div>
-              <div className="rounded-lg bg-rose-50/60 p-3">
-                <dt className="text-xs font-semibold text-rose-900">Risk</dt>
-                <dd className="mt-1 text-xs leading-relaxed text-ink-700">
-                  <Text value={opportunity.risk} fallback="Not stated" />
-                </dd>
-              </div>
-              <div className="rounded-lg bg-ink-50 p-3">
-                <dt className="text-xs font-semibold text-ink-800">Reasoning</dt>
-                <dd className="mt-1 text-xs leading-relaxed text-ink-700">
-                  <Text value={opportunity.reasoningNote} fallback="Not stated" />
-                </dd>
-              </div>
+            <dl className="grid gap-px border-t border-ink-100 bg-ink-100 sm:grid-cols-3">
+              <Facet label="What the business gains" value={opportunity.businessBenefit} />
+              <Facet label="What could go wrong" value={opportunity.risk} tone="risk" />
+              <Facet label="Why this follows" value={opportunity.reasoningNote} />
             </dl>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
-              <span className="text-xs font-medium text-ink-600">Evidence:</span>
+            <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 bg-ink-50/60 px-5 py-3">
+              <span className="text-xs font-medium text-ink-600">Backed by:</span>
               {opportunity.evidence.length > 0 ? (
                 opportunity.evidence.map((snippet) => (
                   <a
@@ -208,20 +120,46 @@ export function TransitionTab({ opportunities }: { opportunities: AiOpportunity[
                     href={snippet.sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-brand-200 ring-inset hover:bg-brand-100"
+                    className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-700 ring-1 ring-brand-200 ring-inset transition-colors hover:bg-brand-50"
                   >
-                    {snippet.title} ↗
+                    {snippet.title}
+                    <span aria-hidden="true">↗</span>
                   </a>
                 ))
               ) : (
-                <span className="text-xs text-ink-400">
-                  No cited source — this opportunity rests on the process description alone.
+                <span className="text-xs text-ink-500">
+                  No source cited — this rests on the process description alone
                 </span>
               )}
             </div>
           </Card>
         ))}
       </ol>
+    </div>
+  );
+}
+
+function Facet({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value?: string | null;
+  tone?: "neutral" | "risk";
+}) {
+  return (
+    <div className="bg-white p-4">
+      <dt
+        className={`text-[11px] font-semibold tracking-wide uppercase ${
+          tone === "risk" ? "text-status-critical-ink" : "text-ink-500"
+        }`}
+      >
+        {label}
+      </dt>
+      <dd className="mt-1 text-xs leading-relaxed text-ink-700">
+        {value?.trim() || <span className="text-ink-400">Not stated</span>}
+      </dd>
     </div>
   );
 }
@@ -247,83 +185,20 @@ export function FutureTab({
   const unlinked = interventions.filter((intervention) => !intervention.futureActivityId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section>
         <SectionHeading
-          title={`The redesigned process (${futureActivities.length} steps)`}
-          description="How the process would run with AI in it. Every step says what a person is still accountable for, what the AI does, and what changed from today."
+          title={`The redesigned process — ${futureActivities.length} steps`}
+          description="How the process would run with AI in it. Every step states what a person is still accountable for, what the AI does, and what changed from today."
         />
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-4xl border-collapse text-left text-sm">
-              <thead className="border-b border-ink-200 bg-ink-50 text-xs tracking-wide text-ink-600 uppercase">
-                <tr>
-                  <th scope="col" className="w-12 px-4 py-3 font-semibold">#</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Future activity</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Human responsibility</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">AI responsibility</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">What changed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-100 align-top">
-                {futureActivities.map((activity) => (
-                  <tr key={activity.id}>
-                    <td className="px-4 py-3 tabular-nums text-ink-400">{activity.sequenceOrder}</td>
-                    <th scope="row" className="max-w-xs px-4 py-3 text-left font-normal">
-                      <p className="font-medium text-ink-900">{activity.name}</p>
-                      <div className="mt-1">
-                        <Badge tone={responsibilityTone[activity.responsibilityType]}>
-                          {humanise(activity.responsibilityType)}
-                        </Badge>
-                      </div>
-                      {activity.description ? (
-                        <p className="mt-1.5 text-xs leading-relaxed text-ink-600">
-                          {activity.description}
-                        </p>
-                      ) : null}
-                    </th>
-                    <td className="max-w-xs px-4 py-3 text-xs leading-relaxed text-ink-700">
-                      <Text value={activity.humanResponsibility} fallback="Nothing — fully automated" />
-                    </td>
-                    <td className="max-w-xs px-4 py-3 text-xs leading-relaxed text-ink-700">
-                      <Text value={activity.aiResponsibility} fallback="No AI in this step" />
-                    </td>
-                    <td className="max-w-xs px-4 py-3">
-                      {activity.interventions.length > 0 ? (
-                        <ul className="space-y-2">
-                          {activity.interventions.map((intervention) => (
-                            <li key={intervention.id}>
-                              <Badge tone={interventionTone[intervention.interventionType]}>
-                                {humanise(intervention.interventionType)}
-                              </Badge>
-                              <p className="mt-1 text-xs leading-relaxed text-ink-700">
-                                {intervention.description}
-                              </p>
-                              {intervention.relatedAiOpportunitySummary ? (
-                                <p className="mt-1 text-[11px] text-ink-500">
-                                  From opportunity: {intervention.relatedAiOpportunitySummary}
-                                </p>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <span className="text-xs text-ink-400">Unchanged</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <FutureFlow activities={futureActivities} />
       </section>
 
       {unlinked.length > 0 ? (
         <section>
           <SectionHeading
-            title="Other interventions"
-            description="Changes that were not attached to a single future step."
+            title="Other changes"
+            description="Changes that were not attached to a single step."
           />
           <ul className="space-y-2">
             {unlinked.map((intervention) => (
@@ -353,11 +228,13 @@ export function EvidenceTab({ evidence }: { evidence: RetrievedSnippet[] }) {
     );
   }
 
+  const maxScore = Math.max(...evidence.map((item) => item.relevanceScore), 0);
+
   return (
     <div className="space-y-4">
       <SectionHeading
-        title={`Research used for this analysis (${evidence.length} sources)`}
-        description="Out of the 16 sources in the library, these are the ones the system judged most relevant to this process and showed to the AI. The score and matched words explain why each was picked — a score of 0.00 means nothing matched and it was included only as general background."
+        title={`Research used for this analysis — ${evidence.length} sources`}
+        description="Out of the 16 sources in the library, these scored highest against this process and were shown to the AI. The score and the matched words explain why each was picked."
       />
       <ul className="grid gap-4 md:grid-cols-2">
         {evidence.map((retrieved) => (
@@ -365,22 +242,16 @@ export function EvidenceTab({ evidence }: { evidence: RetrievedSnippet[] }) {
             key={retrieved.snippet.id}
             snippet={retrieved.snippet}
             footer={
-              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-ink-50 px-2 py-1.5">
-                <span className="text-[11px] font-medium text-ink-600">
-                  Relevance {retrieved.relevanceScore.toFixed(2)}
-                </span>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-ink-50 px-3 py-2">
+                <RelevanceMeter score={retrieved.relevanceScore} max={maxScore} />
                 {retrieved.matchedTerms.length > 0 ? (
                   <span
                     className="text-[11px] text-ink-500"
-                    title="Query terms matched, after stemming"
+                    title="Words shared between your process and this source, after trimming word endings"
                   >
-                    matched: {retrieved.matchedTerms.slice(0, 10).join(", ")}
+                    matched on {retrieved.matchedTerms.slice(0, 8).join(", ")}
                   </span>
-                ) : (
-                  <span className="text-[11px] text-ink-500">
-                    no keyword match — included as general context
-                  </span>
-                )}
+                ) : null}
               </div>
             }
           />

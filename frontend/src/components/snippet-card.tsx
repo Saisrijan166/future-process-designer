@@ -14,13 +14,13 @@ export function SnippetCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <Card as="li" className="flex flex-col p-4">
+    <Card as="li" className="flex flex-col p-4 transition-shadow hover:shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h3 className="text-sm font-semibold text-ink-900">{snippet.title}</h3>
         <Badge tone={sourceTypeTone[snippet.sourceType]}>{sourceTypeLabel[snippet.sourceType]}</Badge>
       </div>
 
-      <p className="mt-2 flex-1 text-sm leading-relaxed text-ink-700">{snippet.snippetText}</p>
+      <p className="mt-2 flex-1 text-[13px] leading-relaxed text-ink-700">{snippet.snippetText}</p>
 
       {snippet.tags.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1">
@@ -37,7 +37,7 @@ export function SnippetCard({
           href={snippet.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-brand-700 hover:underline"
+          className="inline-flex items-center gap-1 font-medium text-brand-700 hover:underline"
         >
           {hostnameOf(snippet.sourceUrl)} ↗
         </a>

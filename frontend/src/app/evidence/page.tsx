@@ -31,17 +31,18 @@ export default function EvidencePage() {
   return (
     <div className="space-y-6">
       <div className="max-w-3xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-900">Evidence corpus</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink-900">The research library</h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-600">
-          The research layer. Rather than calling a live web-search API — which would be a
-          rate-limited dependency in the middle of a demo — this project uses a small hand-curated
-          set of cited excerpts. When a process is analysed, the retriever picks the most relevant
-          of these by keyword match and injects them into the prompt, and each AI opportunity
-          records which of them supported it.
+          These are the sources the AI is allowed to cite. Rather than searching the web live —
+          which would be a rate-limited dependency that could fail mid-demo, and whose results
+          nobody could check afterwards — the system keeps a small hand-curated set of cited
+          excerpts. When you analyse a process, it scores all of them, picks the most relevant, and
+          shows only those to the AI.
         </p>
         <p className="mt-2 text-sm leading-relaxed text-ink-600">
-          Every source below is a real, publicly reachable document. The excerpt text is a
-          paraphrase written for this project, not a copied passage.
+          Every source is a real, publicly reachable document — click through and check. The
+          summary text is written for this project rather than copied from the source. If the AI
+          cites anything that is not on this page, the citation is discarded.
         </p>
       </div>
 
@@ -66,7 +67,7 @@ export default function EvidencePage() {
             ))}
           </div>
 
-          <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <ul className="animate-rise grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {visible.map((snippet) => (
               <SnippetCard key={snippet.id} snippet={snippet} />
             ))}

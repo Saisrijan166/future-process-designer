@@ -114,14 +114,14 @@ export function RunDetails({
           <dd className="font-medium text-ink-800">{formatDuration(run.durationMs)}</dd>
         </div>
         <div>
-          <dt className="text-ink-500">Words in</dt>
-          <dd className="font-medium text-ink-800" title="Prompt tokens">
+          <dt className="text-ink-500">Tokens in</dt>
+          <dd className="font-medium text-ink-800" title="Tokens in the prompt that was sent">
             {formatNumber(run.promptTokens)}
           </dd>
         </div>
         <div>
-          <dt className="text-ink-500">Words out</dt>
-          <dd className="font-medium text-ink-800" title="Output tokens">
+          <dt className="text-ink-500">Tokens out</dt>
+          <dd className="font-medium text-ink-800" title="Tokens in the response that came back">
             {formatNumber(run.outputTokens)}
           </dd>
         </div>

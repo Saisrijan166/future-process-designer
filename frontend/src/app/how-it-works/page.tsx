@@ -17,7 +17,7 @@ function Step({
 }) {
   return (
     <li className="flex gap-4">
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-600 text-sm font-bold text-white">
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-ink-900 text-sm font-bold text-white">
         {number}
       </span>
       <div className="pb-6">
@@ -96,21 +96,21 @@ export default function HowItWorksPage() {
 
       <section className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-ink-900">Current</h3>
+          <h3 className="text-sm font-semibold text-ink-700">Today</h3>
           <p className="mt-1 text-xs leading-relaxed text-ink-600">
             How the process runs today: the steps, who does them, which systems they use, and what
             goes wrong.
           </p>
         </Card>
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-brand-700">Transition</h3>
+          <h3 className="text-sm font-semibold text-viz-augmented">AI ideas</h3>
           <p className="mt-1 text-xs leading-relaxed text-ink-600">
             Where AI could change things — with the benefit, the risk, the reasoning and the sources
             behind each suggestion.
           </p>
         </Card>
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-emerald-700">Future</h3>
+          <h3 className="text-sm font-semibold text-viz-automated">Redesigned</h3>
           <p className="mt-1 text-xs leading-relaxed text-ink-600">
             The redesigned process, step by step, splitting the work explicitly between people and
             AI.
@@ -160,9 +160,9 @@ export default function HowItWorksPage() {
         </dl>
       </section>
 
-      <section className="rounded-xl border border-brand-200 bg-brand-50 p-5">
-        <h2 className="text-sm font-semibold text-brand-900">Try it</h2>
-        <p className="mt-1 text-sm leading-relaxed text-brand-900/80">
+      <section className="rounded-xl border border-ink-200 bg-white p-6">
+        <h2 className="text-base font-semibold text-ink-900">Try it</h2>
+        <p className="mt-1 text-sm leading-relaxed text-ink-600">
           The fastest way to understand it is to run it on something you know well. Describe a
           process from your own work in four or five steps and see whether the result is genuinely
           specific to it.
@@ -170,13 +170,13 @@ export default function HowItWorksPage() {
         <div className="mt-3 flex flex-wrap gap-3">
           <Link
             href="/processes/new"
-            className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="rounded-lg bg-ink-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-ink-800"
           >
             Create a process
           </Link>
           <Link
             href="/"
-            className="rounded-lg border border-brand-300 bg-white px-3.5 py-2 text-sm font-medium text-brand-700 hover:bg-brand-100"
+            className="rounded-lg border border-ink-300 bg-white px-4 py-2 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-50"
           >
             Browse the samples
           </Link>

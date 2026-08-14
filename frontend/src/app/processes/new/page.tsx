@@ -155,13 +155,16 @@ export default function NewProcessPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <Link href="/" className="text-sm text-brand-700 hover:underline">
-          ← Back to processes
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
+          <span aria-hidden="true">←</span> All processes
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink-900">New process</h1>
-        <p className="mt-2 max-w-2xl text-sm text-ink-600">
-          Describe how a process runs <strong>today</strong>. Any industry works — the pipeline has
-          no knowledge of the sample data. On save you will go straight to the analysis.
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink-900">
+          Describe a process as it runs today
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-600">
+          Any industry works — the system has no special knowledge of the samples. Write it the way
+          you would explain it to a new joiner: rough is fine, specific is better. When you save, the
+          analysis starts straight away.
         </p>
       </div>
 
@@ -182,7 +185,7 @@ export default function NewProcessPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="p-5">
           <SectionHeading
-            title="The process"
+            title="What is the process?"
             action={
               <Button type="button" variant="secondary" onClick={loadExample}>
                 Fill an example
@@ -196,7 +199,7 @@ export default function NewProcessPage() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={200}
-                placeholder="e.g. Vendor Invoice Approval"
+                placeholder="Vendor Invoice Approval"
                 className={INPUT_CLASSES}
                 required
               />
@@ -213,7 +216,7 @@ export default function NewProcessPage() {
                 value={industry}
                 onChange={(event) => setIndustry(event.target.value)}
                 maxLength={120}
-                placeholder="e.g. Manufacturing"
+                placeholder="Manufacturing"
                 className={INPUT_CLASSES}
                 required
               />
@@ -243,15 +246,18 @@ export default function NewProcessPage() {
 
         <Card className="p-5">
           <SectionHeading
-            title="Current activities"
-            description="The steps as they happen today, in order. Roles and systems are optional but make the analysis sharper."
+            title="The steps, in order"
+            description="What actually happens today — including the manual, tedious parts. Roles and systems are optional, but naming them makes the analysis noticeably sharper."
           />
 
           <ol className="space-y-4">
             {activities.map((activity, index) => (
-              <li key={activity.key} className="rounded-lg border border-ink-200 bg-ink-50/60 p-4">
+              <li key={activity.key} className="animate-rise rounded-xl border border-ink-200 bg-ink-50/70 p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-semibold tracking-wide text-ink-500 uppercase">
+                  <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-ink-500 uppercase">
+                    <span className="grid size-5 place-items-center rounded-full bg-ink-200 text-[11px] text-ink-700">
+                      {index + 1}
+                    </span>
                     Step {index + 1}
                   </span>
                   <button
@@ -271,7 +277,7 @@ export default function NewProcessPage() {
                       value={activity.name}
                       onChange={(event) => updateActivity(activity.key, { name: event.target.value })}
                       maxLength={200}
-                      placeholder="e.g. Match the invoice to the purchase order"
+                      placeholder="Match the invoice to the purchase order"
                       className={INPUT_CLASSES}
                     />
                   </Field>
@@ -349,14 +355,15 @@ export default function NewProcessPage() {
 
         <div className="flex flex-wrap items-center justify-end gap-3">
           <p className="mr-auto text-xs text-ink-500">
-            {filledActivities.length} step{filledActivities.length === 1 ? "" : "s"} will be saved.
+            {filledActivities.length} step{filledActivities.length === 1 ? "" : "s"} will be saved,
+            then analysed immediately.
           </p>
           <Link href="/" className="text-sm font-medium text-ink-600 hover:text-ink-900">
             Cancel
           </Link>
           <Button type="submit" disabled={!canSubmit}>
             {submitting ? <Spinner /> : null}
-            {submitting ? "Creating…" : "Create and analyse"}
+            {submitting ? "Creating…" : "Create and analyse →"}
           </Button>
         </div>
       </form>
