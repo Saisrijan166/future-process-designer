@@ -1,0 +1,22 @@
+# Test profile. The datasource is supplied by AbstractIntegrationTest via @DynamicPropertySource.
+spring:
+  flyway:
+    clean-disabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+app:
+  ai:
+    # Disables GeminiProvider (which is @ConditionalOnProperty on "gemini") so tests can register
+    # a scripted provider instead. No live provider is ever constructed during a test run.
+    provider: stub
+  analysis:
+    knowledge-snippet-count: 4
+    rate-limit:
+      enabled: false
+
+logging:
+  level:
+    com.assesswise.processdesigner: INFO
+    org.springframework.test: WARN

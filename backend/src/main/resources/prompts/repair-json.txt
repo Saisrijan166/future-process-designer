@@ -1,0 +1,20 @@
+Your previous response could not be used. It must be a single JSON object and nothing else.
+
+WHAT WAS WRONG:
+{{errors}}
+
+YOUR PREVIOUS RESPONSE:
+{{previous_response}}
+
+Return the corrected result now, as one JSON object only.
+Rules:
+- No markdown fences, no explanation, no text before or after the JSON.
+- Use only these keys: problems, ai_opportunities, future_activities, ai_interventions.
+- severity must be one of LOW, MEDIUM, HIGH.
+- automation_potential must be one of LOW, MEDIUM, HIGH.
+- responsibility_type must be one of AI_AUTOMATED, AI_AUGMENTED, HUMAN_LED.
+- intervention_type must be one of AUTOMATE, AUGMENT, ELIMINATE, NEW.
+- Keep the content of your previous answer wherever it was valid; only fix what was wrong.
+
+THE ORIGINAL TASK, FOR REFERENCE:
+{{original_prompt}}

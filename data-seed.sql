@@ -1,0 +1,57 @@
+-- =====================================================================
+-- Sample / synthetic data — pointer file
+--
+-- The seed data is a Flyway migration so that a fresh database is fully
+-- populated on the backend's first start, with no manual SQL step. It lives at:
+--
+--     backend/src/main/resources/db/migration/V2__seed_data.sql
+--
+-- That single file is the source of truth. It is not duplicated here, because
+-- two copies of seed data drift apart and then nobody knows which one ran.
+--
+-- ---------------------------------------------------------------------
+-- What it contains
+-- ---------------------------------------------------------------------
+--   16 roles                    · people who perform activities
+--   13 systems and tools        · systems that support activities
+--   16 knowledge snippets       · curated research, each with a real source URL
+--    6 processes                · the AssessWise sample set
+--   32 activities               · 5-6 current-state steps per process
+--   37 activity-role links
+--   42 activity-system links
+--   18 recorded problems        · source = SEED, i.e. known to the business
+--
+-- Deliberately NOT seeded: ai_opportunity, future_activity, ai_intervention.
+-- All six processes start at status = CURRENT_ONLY so that the demo runs the
+-- real pipeline against them live. Nothing about the future state is pre-baked.
+--
+-- ---------------------------------------------------------------------
+-- Applying it by hand
+-- ---------------------------------------------------------------------
+-- Normally unnecessary — Flyway runs it automatically. To load it into a
+-- database that already has the V1 schema (for example, to reset the samples
+-- after deleting them during a demo):
+--
+--   psql "$DATABASE_URL" -f backend/src/main/resources/db/migration/V2__seed_data.sql
+--
+-- To reset everything and let Flyway rebuild from scratch:
+--
+--   psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+--   # then restart the backend
+--
+-- ---------------------------------------------------------------------
+-- Provenance
+-- ---------------------------------------------------------------------
+-- The six processes and their pain points are synthetic, written to be
+-- realistic for a mid-size online-assessment operation. The figures in them
+-- (turnaround times, proctor-to-candidate ratios, ticket volumes) are
+-- illustrative and are not measurements of any real organisation or client.
+--
+-- The 16 knowledge snippets cite real, publicly reachable documents; each
+-- snippet_text is a paraphrase written for this project rather than a copied
+-- excerpt. See docs/sources.md for the full list and the reasoning behind
+-- using a curated corpus instead of live web search.
+-- =====================================================================
+
+\echo 'The seed data lives in backend/src/main/resources/db/migration/V2__seed_data.sql'
+\echo 'Flyway applies it automatically when the backend starts against a fresh database.'

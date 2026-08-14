@@ -1,0 +1,27 @@
+# Local PostgreSQL for development. The application itself is run with
+# `./mvnw spring-boot:run` (backend) and `npm run dev` (frontend) so that both
+# stay hot-reloadable; only the database is containerised.
+#
+#   docker compose up -d
+#
+# No Docker? Any PostgreSQL 13+ instance works — point DATABASE_URL at it.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: future-designer-db
+    environment:
+      POSTGRES_DB: future_designer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d future_designer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:

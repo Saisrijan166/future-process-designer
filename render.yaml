@@ -1,0 +1,32 @@
+# Render Blueprint for the backend. The frontend is deployed separately on Vercel
+# (see README) because Vercel's free tier hosts Next.js better than Render's does.
+#
+# Everything here fits inside Render's free plan. The trade-off of the free plan
+# is that the instance sleeps after 15 minutes idle and cold-starts in roughly a
+# minute — the frontend is written to show that as "waking up" rather than fail.
+services:
+  - type: web
+    name: ai-future-process-designer-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
+    autoDeployTrigger: commit
+    envVars:
+      # Set these in the Render dashboard; they are intentionally not synced from the repo.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: APP_CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_POOL_SIZE
+        value: "3"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
