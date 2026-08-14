@@ -164,6 +164,31 @@ export interface AnalysisResult {
   detail: ProcessDetail;
 }
 
+export interface ProcessPage {
+  items: ProcessSummary[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  /** Counts across every process — deliberately unaffected by the current filter or page. */
+  stats: {
+    processes: number;
+    analysed: number;
+    opportunities: number;
+    futureActivities: number;
+  };
+}
+
+export interface ProcessListQuery {
+  page?: number;
+  size?: number;
+  status?: ProcessStatus;
+  q?: string;
+  sort?: "recent" | "oldest" | "name" | "analysed";
+}
+
 export interface ActivityInput {
   name: string;
   description: string;

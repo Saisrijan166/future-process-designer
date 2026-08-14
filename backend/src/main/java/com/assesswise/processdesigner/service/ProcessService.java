@@ -17,6 +17,7 @@ import com.assesswise.processdesigner.dto.AnalysisRunSummaryDto;
 import com.assesswise.processdesigner.dto.ComparisonDto;
 import com.assesswise.processdesigner.dto.CreateProcessRequest;
 import com.assesswise.processdesigner.dto.ProcessDetailDto;
+import com.assesswise.processdesigner.dto.ProcessPageDto;
 import com.assesswise.processdesigner.dto.ProcessSummaryDto;
 import com.assesswise.processdesigner.dto.RetrievedSnippetDto;
 import com.assesswise.processdesigner.dto.UpdateProcessRequest;
@@ -43,6 +44,10 @@ import java.util.UUID;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,9 +91,51 @@ public class ProcessService {
         this.mapper = mapper;
     }
 
+    /** Sort keys the API accepts, mapped to entity properties so the client cannot inject one. */
+    private static final Map<String, Sort> SORTS = Map.of(
+            "recent", Sort.by(Sort.Direction.DESC, "createdAt"),
+            "oldest", Sort.by(Sort.Direction.ASC, "createdAt"),
+            "name", Sort.by(Sort.Direction.ASC, "name"),
+            "analysed", Sort.by(Sort.Direction.DESC, "lastAnalyzedAt"));
+
+    private static final int MAX_PAGE_SIZE = 100;
+
     @Transactional(readOnly = true)
-    public List<ProcessSummaryDto> listProcesses() {
-        return processRepository.findAllSummaries();
+    public ProcessPageDto listProcesses(int page, int size, ProcessStatus status, String search, String sort) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(safePage, safeSize, SORTS.getOrDefault(sort, SORTS.get("recent")));
+
+        // Lowercased and wildcarded here so the query itself stays a plain `like`, and so a user
+        // typing % or _ searches for those characters rather than for everything.
+        String normalisedSearch = (search == null || search.isBlank())
+                ? null
+                : "%" + search.trim().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+
+        Page<ProcessSummaryDto> result =
+                processRepository.findSummaryPage(status, normalisedSearch, pageable);
+
+        return new ProcessPageDto(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.hasPrevious(),
+                result.hasNext(),
+                datasetStats());
+    }
+
+    /**
+     * Totals across every process, independent of the page and the filter — these are the headline
+     * numbers, and they should not move when the user searches.
+     */
+    private ProcessPageDto.Stats datasetStats() {
+        return new ProcessPageDto.Stats(
+                processRepository.count(),
+                processRepository.countByStatus(ProcessStatus.ANALYZED),
+                opportunityRepository.count(),
+                futureActivityRepository.count());
     }
 
     @Transactional

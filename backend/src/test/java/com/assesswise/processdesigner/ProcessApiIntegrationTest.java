@@ -7,9 +7,11 @@ import com.assesswise.processdesigner.domain.ProcessStatus;
 import com.assesswise.processdesigner.dto.CreateProcessRequest;
 import com.assesswise.processdesigner.dto.KnowledgeSnippetDto;
 import com.assesswise.processdesigner.dto.ProcessDetailDto;
+import com.assesswise.processdesigner.dto.ProcessPageDto;
 import com.assesswise.processdesigner.dto.ProcessSummaryDto;
 import com.assesswise.processdesigner.dto.UpdateProcessRequest;
 import com.assesswise.processdesigner.support.AbstractIntegrationTest;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -41,12 +43,16 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
                                 List.of("Branch Officer", "Compliance Officer"), List.of("Core Banking System"))));
     }
 
+    /** Pulls every row across pages, so assertions do not depend on the default page size. */
+    private List<ProcessSummaryDto> allProcesses() {
+        ProcessPageDto first = restTemplate.getForObject("/api/processes?size=100", ProcessPageDto.class);
+        return first.items();
+    }
+
     @Test
     @DisplayName("the six seed processes are present and start un-analysed")
     void seedProcessesArePresent() {
-        List<ProcessSummaryDto> processes = restTemplate.exchange(
-                "/api/processes", HttpMethod.GET, null,
-                new ParameterizedTypeReference<List<ProcessSummaryDto>>() {}).getBody();
+        List<ProcessSummaryDto> processes = allProcesses();
 
         List<ProcessSummaryDto> seeded = processes.stream()
                 .filter(process -> process.origin() == ProcessOrigin.SEED)
@@ -72,10 +78,7 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("seed processes carry their roles, systems and recorded pain points")
     void seedProcessesAreFullyPopulated() {
-        List<ProcessSummaryDto> processes = restTemplate.exchange(
-                "/api/processes", HttpMethod.GET, null,
-                new ParameterizedTypeReference<List<ProcessSummaryDto>>() {}).getBody();
-        UUID gradingId = processes.stream()
+        UUID gradingId = allProcesses().stream()
                 .filter(process -> process.name().equals("Result Evaluation & Grading"))
                 .findFirst().orElseThrow().id();
 
@@ -255,6 +258,111 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("rejects a malformed UUID with 400 rather than 500")
     void rejectsMalformedId() {
         assertThat(restTemplate.getForEntity("/api/processes/not-a-uuid", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    /* ------------------------------------------------------------------ paging */
+
+    @Test
+    @DisplayName("pages the listing without dropping or repeating a row")
+    void pagesCleanly() {
+        ProcessPageDto everything = restTemplate.getForObject("/api/processes?size=100", ProcessPageDto.class);
+        long total = everything.totalItems();
+        assertThat(total).isGreaterThanOrEqualTo(6);
+
+        List<UUID> walked = new ArrayList<>();
+        int page = 0;
+        ProcessPageDto current;
+        do {
+            current = restTemplate.getForObject("/api/processes?size=2&page=" + page, ProcessPageDto.class);
+            assertThat(current.page()).isEqualTo(page);
+            assertThat(current.size()).isEqualTo(2);
+            assertThat(current.items()).hasSizeLessThanOrEqualTo(2);
+            current.items().forEach(item -> walked.add(item.id()));
+            page++;
+        } while (current.hasNext());
+
+        // Every row seen exactly once, and the page count agrees with the row count.
+        assertThat(walked).hasSize((int) total).doesNotHaveDuplicates();
+        assertThat(page).isEqualTo(current.totalPages());
+        assertThat(current.hasNext()).isFalse();
+    }
+
+    @Test
+    @DisplayName("the status filter applies to the whole dataset, not just the visible page")
+    void filtersAcrossTheDataset() {
+        ProcessPageDto pending = restTemplate.getForObject(
+                "/api/processes?status=CURRENT_ONLY&size=100", ProcessPageDto.class);
+
+        assertThat(pending.items()).isNotEmpty();
+        assertThat(pending.items()).allSatisfy(item ->
+                assertThat(item.status()).isEqualTo(ProcessStatus.CURRENT_ONLY));
+        assertThat(pending.totalItems()).isEqualTo(pending.items().size());
+    }
+
+    @Test
+    @DisplayName("the headline stats describe the dataset, so filtering does not move them")
+    void statsIgnoreTheFilter() {
+        ProcessPageDto unfiltered = restTemplate.getForObject("/api/processes", ProcessPageDto.class);
+        ProcessPageDto filtered = restTemplate.getForObject(
+                "/api/processes?status=ANALYZED&q=zzzz-no-match", ProcessPageDto.class);
+
+        assertThat(filtered.items()).isEmpty();
+        assertThat(filtered.totalItems()).isZero();
+        // ...but the headline numbers are unchanged.
+        assertThat(filtered.stats()).isEqualTo(unfiltered.stats());
+        assertThat(filtered.stats().processes()).isGreaterThanOrEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("search matches name, industry and description")
+    void searchesAcrossFields() {
+        assertThat(restTemplate.getForObject("/api/processes?q=proctoring", ProcessPageDto.class).items())
+                .anySatisfy(item -> assertThat(item.name()).contains("Proctoring"));
+        assertThat(restTemplate.getForObject("/api/processes?q=ONLINE EDUCATION", ProcessPageDto.class).items())
+                .isNotEmpty();
+        assertThat(restTemplate.getForObject("/api/processes?q=certificate", ProcessPageDto.class).items())
+                .isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("a wildcard typed into search is treated as a literal, not as match-everything")
+    void escapesWildcards() {
+        ProcessPageDto result = restTemplate.getForObject("/api/processes?q=%25", ProcessPageDto.class);
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalItems()).isZero();
+    }
+
+    @Test
+    @DisplayName("sorting by name is honoured despite the grouped projection")
+    void sortsByName() {
+        List<String> names = restTemplate
+                .getForObject("/api/processes?sort=name&size=100", ProcessPageDto.class)
+                .items().stream().map(ProcessSummaryDto::name).toList();
+
+        assertThat(names).isSortedAccordingTo(String.CASE_INSENSITIVE_ORDER);
+    }
+
+    @Test
+    @DisplayName("clamps absurd paging parameters instead of failing")
+    void clampsPagingParameters() {
+        ProcessPageDto huge = restTemplate.getForObject("/api/processes?size=100000", ProcessPageDto.class);
+        assertThat(huge.size()).isEqualTo(100);
+
+        ProcessPageDto negative = restTemplate.getForObject("/api/processes?page=-5&size=0", ProcessPageDto.class);
+        assertThat(negative.page()).isZero();
+        assertThat(negative.size()).isEqualTo(1);
+
+        ProcessPageDto beyondEnd = restTemplate.getForObject("/api/processes?page=9999", ProcessPageDto.class);
+        assertThat(beyondEnd.items()).isEmpty();
+        assertThat(beyondEnd.hasNext()).isFalse();
+    }
+
+    @Test
+    @DisplayName("rejects an unknown status value with 400")
+    void rejectsUnknownStatus() {
+        assertThat(restTemplate.getForEntity("/api/processes?status=BANANA", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

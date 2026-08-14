@@ -159,7 +159,7 @@ transaction, so no duplicate or orphaned rows accumulate.
 ## Tests
 
 ```bash
-cd backend && ./mvnw verify        # 100 tests
+cd backend && ./mvnw verify        # 108 tests
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 
@@ -179,6 +179,7 @@ What is covered:
 | Citation integrity | A fabricated snippet title is discarded, leaves no `ai_opportunity_evidence` row, and is reported as a warning |
 | Both AI providers | Each runs against a real local HTTP server: request shape, response unpacking, 429 retry, non-retryable auth failure, safety block, truncation |
 | Provider failover | Falls through on quota exhaustion, skips a provider with no key, records who actually answered and why the first was passed over, and fails distinctly when none are configured |
+| Listing, paging and search | Walks every page asserting no row is dropped or repeated, that a status filter applies to the whole dataset rather than the visible page, that the headline stats ignore the filter, that a typed `%` is a literal rather than match-everything, and that absurd page parameters are clamped |
 | Parsing and validation | Markdown fences, prose wrappers, braces and escaped quotes inside strings, enum synonyms, oversized payloads, duplicate items |
 
 The model call itself is scripted in tests, by a stub that lives in `src/test/java` only and is
@@ -296,7 +297,7 @@ at the cost of output changing between runs.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/processes` | List processes with activity, opportunity and future-step counts |
+| `GET` | `/api/processes` | List processes — paginated, filterable and searchable (`page`, `size`, `status`, `q`, `sort`) |
 | `POST` | `/api/processes` | Create a process and its current activities |
 | `GET` | `/api/processes/{id}` | Full detail: current, transition, future, evidence |
 | `PUT` | `/api/processes/{id}` | Replace the definition (clears any stale future state) |
@@ -367,7 +368,7 @@ backend/                     Spring Boot service
   src/main/resources/
     db/migration/            Flyway: V1 schema, V2 sample data, V3 provider audit column
     prompts/                 Prompt templates — text, not Java
-  src/test/java/             100 tests, integration tests on real PostgreSQL
+  src/test/java/             108 tests, integration tests on real PostgreSQL
 
 frontend/src/
   app/                       Dashboard, how-it-works, new-process form, detail page, evidence corpus

@@ -2,15 +2,16 @@ package com.assesswise.processdesigner.controller;
 
 import com.assesswise.processdesigner.dto.ComparisonDto;
 import com.assesswise.processdesigner.dto.CreateProcessRequest;
+import com.assesswise.processdesigner.domain.ProcessStatus;
 import com.assesswise.processdesigner.dto.ProcessDetailDto;
-import com.assesswise.processdesigner.dto.ProcessSummaryDto;
+import com.assesswise.processdesigner.dto.ProcessPageDto;
 import com.assesswise.processdesigner.dto.UpdateProcessRequest;
 import com.assesswise.processdesigner.service.ProcessService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -34,9 +36,22 @@ public class ProcessController {
     }
 
     @GetMapping
-    @Operation(summary = "List all processes with their activity, opportunity and future-activity counts")
-    public List<ProcessSummaryDto> list() {
-        return processService.listProcesses();
+    @Operation(summary = "List processes, paginated",
+            description = "Filtering and paging happen in the database, so a status filter applies to the "
+                    + "whole dataset rather than only the page on screen. The dataset-wide stats in the "
+                    + "response are deliberately unaffected by the filter.")
+    public ProcessPageDto list(
+            @Parameter(description = "Zero-based page index")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Rows per page (1-100)")
+            @RequestParam(defaultValue = "9") int size,
+            @Parameter(description = "Only processes in this state")
+            @RequestParam(required = false) ProcessStatus status,
+            @Parameter(description = "Free-text match on name, industry or description")
+            @RequestParam(required = false) String q,
+            @Parameter(description = "recent | oldest | name | analysed")
+            @RequestParam(defaultValue = "recent") String sort) {
+        return processService.listProcesses(page, size, status, q, sort);
     }
 
     @PostMapping

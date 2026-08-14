@@ -5,7 +5,8 @@ import type {
   CreateProcessRequest,
   KnowledgeSnippet,
   ProcessDetail,
-  ProcessSummary,
+  ProcessListQuery,
+  ProcessPage,
   Role,
   SystemTool,
 } from "./types";
@@ -110,7 +111,16 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFA
 }
 
 export const api = {
-  listProcesses: () => request<ProcessSummary[]>("/api/processes"),
+  listProcesses: (query: ProcessListQuery = {}) => {
+    const params = new URLSearchParams();
+    if (query.page != null) params.set("page", String(query.page));
+    if (query.size != null) params.set("size", String(query.size));
+    if (query.status) params.set("status", query.status);
+    if (query.q?.trim()) params.set("q", query.q.trim());
+    if (query.sort) params.set("sort", query.sort);
+    const suffix = params.toString();
+    return request<ProcessPage>(`/api/processes${suffix ? `?${suffix}` : ""}`);
+  },
 
   getProcess: (id: string) => request<ProcessDetail>(`/api/processes/${id}`),
 
