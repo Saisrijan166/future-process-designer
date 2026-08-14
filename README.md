@@ -21,10 +21,32 @@ Current activities  →  Problems  →  AI opportunities  →  Future activities
 | **Accounts** | Email + password, BCrypt, stateless JWT — your processes are private to you |
 | **Cost to run** | Nothing. Every service is free-tier or open source — see [LIBRARIES.md](LIBRARIES.md) |
 
-**Live URLs** — fill these in after deploying:
+**Live URLs**
 
-- Frontend: `https://<your-app>.vercel.app`
-- Backend: `https://<your-api>.onrender.com` · API docs at `/swagger-ui.html`
+- Frontend: <https://future-process-designer.vercel.app>
+- Backend: <https://ai-future-process-designer-api.onrender.com> · API docs at `/swagger-ui.html`
+
+> The backend sleeps after 15 minutes idle on Render's free plan and takes about a minute to wake.
+> Open the frontend and give it a moment before judging it unresponsive.
+
+---
+
+## Submission deliverables
+
+| Required | Where it is |
+|---|---|
+| **README / setup instructions** | This file — [Run it locally](#run-it-locally) for a from-scratch local run, [DEPLOYMENT.md](DEPLOYMENT.md) for the hosted one |
+| **Architecture documentation** | [docs/architecture-diagram.md](docs/architecture-diagram.md) — the four layers, the eight-step analysis pipeline, and the request path end to end |
+| **Database documentation** | [docs/data-model.md](docs/data-model.md) — every table and column, the current/transition/future split, and the SQL that walks a future step back to its evidence |
+| **AI tools / model disclosure** | [docs/ai-tools-disclosure.md](docs/ai-tools-disclosure.md) — how this was built with AI assistance, what was generated, what was corrected, and what the assistant got wrong |
+| **Library disclosure** | [LIBRARIES.md](LIBRARIES.md) — every dependency, its licence, and why it is there |
+| **Sample data** | [V2__seed_data.sql](backend/src/main/resources/db/migration/V2__seed_data.sql) — 6 processes, 32 activities, 18 problems, 16 roles, 13 systems. Applied by Flyway at first start, so there is no manual load step. [data-seed.sql](data-seed.sql) documents the contents and how to run it by hand |
+| **Research sources** | [docs/sources.md](docs/sources.md) — 16 cited excerpts, each with a URL verified to return HTTP 200, plus the corpus's limitations. Browsable in the running app under **Evidence** |
+
+Two more that were not asked for but make the build checkable: [docs/demo-script.md](docs/demo-script.md)
+walks the whole system in 10–15 minutes including the surprise-record test, and
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs the test suite against a real PostgreSQL
+on every push.
 
 ---
 
@@ -387,11 +409,5 @@ docs/
 
 ## Documentation
 
-- [Deployment guide](DEPLOYMENT.md) — Neon, Render and Vercel, with every environment variable
-- [Architecture](docs/architecture-diagram.md) — layers, pipeline sequence, deployment topology
-- [Data model](docs/data-model.md) — ER diagram, the join path, schema decisions
-- [Research sources](docs/sources.md) — all 16 sources with real URLs
-- [Library inventory](LIBRARIES.md) — every dependency, version and licence
-- [Demo script](docs/demo-script.md) — the 10–15 minute walkthrough
-- [AI tools disclosure](docs/ai-tools-disclosure.md) — what was generated, what was decided
-- [Seed data](data-seed.sql) — where the sample data lives and how to load it standalone
+Every document is indexed in [Submission deliverables](#submission-deliverables) at the top of this
+file, alongside the [deployment guide](DEPLOYMENT.md).

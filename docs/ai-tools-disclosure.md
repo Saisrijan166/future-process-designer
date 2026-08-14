@@ -53,20 +53,22 @@ These are recorded because they are the honest texture of building this way:
 - **A stemmer that didn't collide the forms it needed to.** "grading" and "grade" produced different
   tokens, so keyword retrieval missed obvious matches. Found by a unit test written to assert the
   property rather than the implementation.
-- **Two dead model ids before a working one.** The build plan specified `gemini-1.5-flash`, which
+- **Three dead ends before a working model id.** The build plan specified `gemini-1.5-flash`, which
   is retired. The replacement chosen from knowledge of the API, `gemini-2.5-flash`, is still listed
-  by the models endpoint but rejects newly-issued keys outright. Only `gemini-3.7-flash` was
-  confirmed by making a real call. Nothing about model availability was taken on trust, and the
-  model id is configuration rather than a constant precisely because this keeps happening.
+  by the models endpoint but rejects newly-issued keys outright. `gemini-3.7-flash` worked but
+  allows only ~20 requests a day, which ran out during testing. The deployed default is
+  `gemini-3.1-flash-lite` with thinking disabled — a larger free allowance, and an analysis that
+  takes 8 seconds instead of 27. Each of those was established by making a real call, not by
+  assuming; the model id is configuration rather than a constant precisely because this keeps
+  happening.
 - **Source URLs were verified, not assumed.** Every one of the 16 research URLs was fetched and
   checked to return HTTP 200 before being written into the seed data. Several plausible-looking
   candidates were discarded because they 404'd or blocked access.
 
 ## What I decided and reviewed
 
-*Owner: rewrite this section in your own words. The points below are the decisions that were made
-during the build and that you will be asked to defend — keep the ones you genuinely own, and be
-straightforward about the rest.*
+These are the judgement calls the assistant could not make — where the trade-off was mine to accept
+and mine to defend.
 
 - **The domain and scope.** Online education and digital assessment, six seed processes, one
   pipeline. Chosen so that I can tell whether the generated output is actually sensible for the
