@@ -13,6 +13,7 @@ import {
   Spinner,
 } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
+import { Modal } from "@/components/modal";
 import { PROCESS_EXAMPLES, type ProcessExample } from "@/lib/examples";
 import type { CreateProcessRequest, Role, SystemTool } from "@/lib/types";
 
@@ -50,6 +51,7 @@ export default function NewProcessPage() {
   const [knownRoles, setKnownRoles] = useState<Role[]>([]);
   const [knownSystems, setKnownSystems] = useState<SystemTool[]>([]);
   const [loadedExample, setLoadedExample] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     // Suggestions only — the form works perfectly well if these never load.
@@ -156,10 +158,20 @@ export default function NewProcessPage() {
         />
       ) : null}
 
-      <ExamplePicker
+      <ExampleBar
         loadedExample={loadedExample}
-        onPick={loadExample}
+        onBrowse={() => setPickerOpen(true)}
         onClear={clearForm}
+      />
+
+      <ExampleDialog
+        open={pickerOpen}
+        loadedExample={loadedExample}
+        onClose={() => setPickerOpen(false)}
+        onPick={(example) => {
+          setPickerOpen(false);
+          loadExample(example);
+        }}
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -345,42 +357,89 @@ export default function NewProcessPage() {
 }
 
 /**
- * Six starting points across unrelated industries.
+ * A single compact row, rather than the six cards it replaces.
  *
- * The variety is the argument: picking "Student admissions screening" and picking "Warehouse order
- * picking" both work, and the second one matches nothing in the research library — which the
- * Evidence tab then says out loud rather than papering over.
+ * Examples are useful for someone meeting the form cold and pure noise for someone who already
+ * knows what they want to type — so they live behind a button and give back the vertical space.
  */
-function ExamplePicker({
+function ExampleBar({
   loadedExample,
-  onPick,
+  onBrowse,
   onClear,
 }: {
   loadedExample: string | null;
-  onPick: (example: ProcessExample) => void;
+  onBrowse: () => void;
   onClear: () => void;
 }) {
+  const loaded = PROCESS_EXAMPLES.find((example) => example.id === loadedExample);
+
   return (
-    <Card className="p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-ink-900">
-            Not sure what to write? Start from an example
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-600">
-            Each one fills the form below with a real-looking process from a different industry.
-            They are inputs, not saved answers — the analysis still runs from scratch, and you can
-            edit anything before submitting.
-          </p>
-        </div>
-        {loadedExample ? (
+    <Card className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
+      {loaded ? (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-ink-600">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-900 px-2.5 py-1 text-xs font-medium text-white">
+            <svg className="size-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M3.5 8.5l3 3 6-7"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {loaded.name}
+          </span>
+          loaded into the form — edit anything before submitting.
+        </p>
+      ) : (
+        <p className="text-sm text-ink-600">
+          Not sure what to write?{" "}
+          <span className="text-ink-500">
+            Load one of {PROCESS_EXAMPLES.length} example processes from different industries.
+          </span>
+        </p>
+      )}
+
+      <div className="ml-auto flex items-center gap-2">
+        {loaded ? (
           <Button type="button" variant="ghost" onClick={onClear}>
             Clear the form
           </Button>
         ) : null}
+        <Button type="button" variant="secondary" onClick={onBrowse}>
+          {loaded ? "Choose another" : "Browse examples"}
+        </Button>
       </div>
+    </Card>
+  );
+}
 
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+/**
+ * The example list, in a dialog.
+ *
+ * The spread across industries is the point: "Student admissions screening" matches the research
+ * library and cites sources, while "Warehouse order picking" matches nothing and says so. Both
+ * outcomes are worth demonstrating, so the set stays deliberately varied.
+ */
+function ExampleDialog({
+  open,
+  loadedExample,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  loadedExample: string | null;
+  onClose: () => void;
+  onPick: (example: ProcessExample) => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Start from an example"
+      description="Each one fills the form with a real-looking process from a different industry. They are inputs, not saved answers — the analysis still runs from scratch, and you can edit anything before submitting."
+    >
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {PROCESS_EXAMPLES.map((example) => {
           const active = loadedExample === example.id;
           return (
@@ -412,7 +471,9 @@ function ExamplePicker({
                 <span className={`mt-0.5 text-xs ${active ? "text-ink-300" : "text-ink-500"}`}>
                   {example.industry}
                 </span>
-                <span className={`mt-1.5 text-xs leading-relaxed ${active ? "text-ink-200" : "text-ink-600"}`}>
+                <span
+                  className={`mt-1.5 text-xs leading-relaxed ${active ? "text-ink-200" : "text-ink-600"}`}
+                >
                   {example.teaser}
                 </span>
                 <span
@@ -425,6 +486,6 @@ function ExamplePicker({
           );
         })}
       </ul>
-    </Card>
+    </Modal>
   );
 }
