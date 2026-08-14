@@ -1,0 +1,4 @@
+# Registered here rather than as a @Component so it runs before any bean is created —
+# the datasource fails during context refresh, which is too late for a helpful message.
+org.springframework.context.ApplicationListener=\
+com.assesswise.processdesigner.config.DatabaseUrlCheck

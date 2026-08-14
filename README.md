@@ -168,7 +168,7 @@ transaction, so no duplicate or orphaned rows accumulate.
 ## Tests
 
 ```bash
-cd backend && ./mvnw verify        # 126 tests
+cd backend && ./mvnw verify        # 129 tests
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 
@@ -188,6 +188,7 @@ What is covered:
 | Citation integrity | A fabricated snippet title is discarded, leaves no `ai_opportunity_evidence` row, and is reported as a warning |
 | Both AI providers | Each runs against a real local HTTP server: request shape, response unpacking, 429 retry, non-retryable auth failure, safety block, truncation |
 | Provider failover | Falls through on quota exhaustion, skips a provider with no key, records who actually answered and why the first was passed over, and fails distinctly when none are configured |
+| Deployment misconfiguration | A `DATABASE_URL` with the credentials still embedded — the mistake every hosted-Postgres connection string invites — is caught at startup with the corrected URL printed, rather than failing deep inside the connection pool |
 | Accounts and isolation | Registration, sign-in, token rejection, and — the ones that matter — that one account cannot list, search, read, analyse, edit or delete another's process, that the shared samples are visible to all but writable by none, and that the dashboard totals count only what the caller can see |
 | Listing, paging and search | Walks every page asserting no row is dropped or repeated, that a status filter applies to the whole dataset rather than the visible page, that the headline stats ignore the filter, that a typed `%` is a literal rather than match-everything, and that absurd page parameters are clamped |
 | Parsing and validation | Markdown fences, prose wrappers, braces and escaped quotes inside strings, enum synonyms, oversized payloads, duplicate items |
@@ -369,7 +370,7 @@ backend/                     Spring Boot service
   src/main/resources/
     db/migration/            Flyway: V1 schema, V2 sample data, V3 provider audit, V4 accounts
     prompts/                 Prompt templates — text, not Java
-  src/test/java/             126 tests, integration tests on real PostgreSQL
+  src/test/java/             129 tests, integration tests on real PostgreSQL
 
 frontend/src/
   app/                       Login, dashboard, how-it-works, new-process form, detail page, evidence

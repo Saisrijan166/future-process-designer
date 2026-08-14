@@ -13,21 +13,31 @@ Total cost: nothing. No card required for any of the three.
 2. On the dashboard, open **Connection details** and copy the **pooled** connection string — the
    host contains `-pooler`. Use the pooled one: Neon's free tier allows few direct connections, and
    the pooler is what keeps a restarting service from exhausting them.
-3. Convert it to JDBC form. Neon gives you something like:
+3. Convert it to JDBC form. **This is the step that trips everyone up**, so here it is exactly.
+
+   Neon gives you a libpq URL with the credentials inside it:
 
    ```
-   postgresql://neondb_owner:npg_XXXX@ep-cool-name-12345-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+   postgresql://neondb_owner:npg_XXXX@ep-cool-name-12345-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+                └────────── delete this whole part, including the @ ──────────┘
    ```
 
-   Which becomes three separate values:
+   The JDBC driver takes the credentials as *separate* properties, so you split it into three:
 
    | Variable | Value |
    |---|---|
-   | `DATABASE_URL` | `jdbc:postgresql://ep-cool-name-12345-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require` |
+   | `DATABASE_URL` | `jdbc:postgresql://ep-cool-name-12345-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require` |
    | `DATABASE_USERNAME` | `neondb_owner` |
    | `DATABASE_PASSWORD` | `npg_XXXX` |
 
-   Note the three edits: prefix `jdbc:`, drop the `user:password@` part, keep `?sslmode=require`.
+   Exactly two edits: **add `jdbc:` at the front**, and **delete `neondb_owner:npg_XXXX@`**.
+   Everything after the host stays — the database name and the whole query string, `sslmode` and
+   `channel_binding` included. Both are fine for the JDBC driver; only the embedded credentials
+   are not.
+
+   Leaving the credentials in produces a misleading error that never mentions them:
+   *"Driver org.postgresql.Driver claims to not accept jdbcUrl"*. The application now detects this
+   at startup and prints the corrected URL for you instead, but it is quicker to get it right here.
 
 **Nothing else to do here.** Do not create tables. On its first start the backend runs the Flyway
 migrations and seeds the six sample processes and sixteen research sources itself.
@@ -54,13 +64,13 @@ which means Render will prompt for them rather than take them from the repo.
 
 | Variable | Required | Value | Notes |
 |---|---|---|---|
-| `DATABASE_URL` | **yes** | `jdbc:postgresql://…-pooler….neon.tech/neondb?sslmode=require` | From step 1 |
+| `DATABASE_URL` | **yes** | `jdbc:postgresql://<host>/neondb?sslmode=require&channel_binding=require` — **host only, no credentials** | From step 1 |
 | `DATABASE_USERNAME` | **yes** | `neondb_owner` | From step 1 |
-| `DATABASE_PASSWORD` | **yes** | *(Neon password)* | From step 1 |
+| `DATABASE_PASSWORD` | **yes** | *(the `npg_…` password)* | From step 1 |
 | `AUTH_JWT_SECRET` | **yes** | *(auto-generated)* | The blueprint generates one. Setting it by hand? `openssl rand -base64 48`. Changing it later signs everyone out. |
 | `GEMINI_API_KEY` | **yes** | *(from AI Studio)* | <https://aistudio.google.com/apikey> |
 | `GROQ_API_KEY` | recommended | *(from Groq)* | <https://console.groq.com/keys> — the fallback when Gemini's small free quota runs out |
-| `APP_CORS_ALLOWED_ORIGINS` | **yes** | `https://your-app.vercel.app` | Fill in after step 3. Wildcards work: `https://*.vercel.app` also covers preview builds |
+| `APP_CORS_ALLOWED_ORIGINS` | **yes** | `https://your-app.vercel.app` | Fill in after step 3. Wildcards work — `https://*.vercel.app` also covers preview builds. A trailing slash is harmless |
 | `AUTH_DEMO_ACCOUNT_ENABLED` | — | `false` | Set by the blueprint. Leave off unless you want the shared demo login |
 | `DATABASE_POOL_SIZE` | — | `3` | Set by the blueprint. Keep small for Neon's free tier |
 | `GEMINI_MODEL` | — | `gemini-3.1-flash-lite` | Set by the blueprint |
@@ -147,8 +157,10 @@ exactly this reason. If it still runs out, Groq answers instead and the result p
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Site loads, every request fails, console shows a CORS error | `APP_CORS_ALLOWED_ORIGINS` does not match the Vercel URL | Set it on Render exactly, including `https://`, no trailing slash |
+| Site loads, every request fails, console shows a CORS error | `APP_CORS_ALLOWED_ORIGINS` does not match the Vercel URL | Set it on Render including the `https://`. A trailing slash is tolerated; a missing scheme or the wrong subdomain is not |
 | "Could not reach the API at http://localhost:8080" | `NEXT_PUBLIC_API_BASE_URL` was unset at build time | Set it on Vercel and **redeploy** |
+| Deploy fails: *"Driver org.postgresql.Driver claims to not accept jdbcUrl"* | `DATABASE_URL` still has `user:password@` in it | Delete that part — see step 1. The startup check prints the corrected URL in the log |
+| Deploy fails: *"DATABASE_URL must be a JDBC URL"* | Missing the `jdbc:` prefix | Add it |
 | Backend deploy fails on start with a Flyway error | Pointed at a database that already has a different schema | Use an empty Neon database, or drop and recreate the `public` schema |
 | Every request returns 401 straight after a deploy | `AUTH_JWT_SECRET` changed, invalidating existing tokens | Expected. Sign in again |
 | `Analyse` returns 503 | No AI key configured | Set `GEMINI_API_KEY` (and ideally `GROQ_API_KEY`) |
