@@ -37,6 +37,7 @@ Current activities  →  Problems  →  AI opportunities  →  Future activities
 |---|---|
 | **README / setup instructions** | This file — [Run it locally](#run-it-locally) for a from-scratch local run, [DEPLOYMENT.md](DEPLOYMENT.md) for the hosted one |
 | **Architecture documentation** | [docs/architecture-diagram.md](docs/architecture-diagram.md) — the four layers, the eight-step analysis pipeline, and the request path end to end. Exported as PNG in [docs/diagrams/](docs/diagrams/) |
+| **AI architecture** | [docs/ai-architecture.md](docs/ai-architecture.md) — the knowledge, prompt, reasoning and guardrail layers, and which decisions belong to software rather than the model |
 | **Technical documentation** | [docs/technical-documentation.md](docs/technical-documentation.md) — module map, full API reference, pipeline internals, security model, every configuration variable, testing and operations. [docs/](docs/) indexes everything |
 | **Database documentation** | [docs/data-model.md](docs/data-model.md) — every table and column, the current/transition/future split, and the SQL that walks a future step back to its evidence. ER diagram as PNG in [docs/diagrams/](docs/diagrams/) |
 | **AI tools / model disclosure** | [docs/ai-tools-disclosure.md](docs/ai-tools-disclosure.md) — how this was built with AI assistance, what was generated, what was corrected, and what the assistant got wrong |
@@ -403,6 +404,7 @@ frontend/src/
 docs/
   README.md                  Index of every document
   architecture-diagram.md    Layer diagram and pipeline sequence diagram
+  ai-architecture.md         The AI layers and the software/model decision split
   data-model.md              ER diagram and the join path behind the chain
   technical-documentation.md Module map, API reference, config, security, operations
   diagrams/                  Each diagram as a PNG, with its Mermaid source beside it

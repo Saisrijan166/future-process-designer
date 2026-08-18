@@ -1,0 +1,81 @@
+flowchart TB
+    subgraph INPUT["1 · INPUT — deterministic software"]
+        direction LR
+        PROC["Business process<br/>name · industry · description"]
+        ACTS["Current activities<br/>roles · systems · recorded problems"]
+    end
+
+    subgraph KNOW["2 · KNOWLEDGE LAYER — curated, versioned, in PostgreSQL"]
+        direction LR
+        CORPUS[("knowledge_snippet<br/>16 cited excerpts<br/>title · body · tags · publisher · URL")]
+        RET["KnowledgeRetrievalService<br/>TF-IDF-weighted keyword match<br/><i>tags ×3 · title ×2 · body ×1</i>"]
+        SCORE["Scored snippets<br/>score + matched terms<br/><i>persisted, so selection is explainable</i>"]
+    end
+
+    subgraph PROMPT["3 · PROMPT LAYER — text, not code"]
+        direction LR
+        TPL["resources/prompts/analyze-process.txt<br/>resources/prompts/repair-json.txt"]
+        PB["PromptBuilder<br/>process + activities + retrieved snippets"]
+        SCHEMA["AnalysisJsonSchema<br/><i>generated from the Java enums</i>"]
+    end
+
+    subgraph MODEL["4 · REASONING LAYER — the only non-deterministic step"]
+        direction LR
+        IFACE["AiProvider <i>(interface)</i><br/><b>the single seam to any model</b>"]
+        CHAIN["FallbackAiProvider<br/><i>tries each provider in order</i>"]
+        GEM["GeminiProvider<br/><i>primary</i>"]
+        GRQ["GroqProvider<br/><i>fallback</i>"]
+    end
+
+    subgraph GUARD["5 · GUARDRAIL LAYER — deterministic software again"]
+        direction TB
+        PARSE["AnalysisResponseParser<br/>fence stripping · brace matching"]
+        VAL["AnalysisPayloadValidator<br/>enum coercion · caps · per-item drops"]
+        CITE["Citation resolution<br/><i>a cited source not in the corpus is dropped</i>"]
+        REPAIR{"usable?"}
+    end
+
+    subgraph OUT["6 · STRUCTURED OUTPUT — typed rows, not prose"]
+        direction LR
+        OPP[("ai_opportunity<br/>+ ai_opportunity_evidence")]
+        FUT[("future_activity<br/>human vs AI responsibility")]
+        INT[("ai_intervention<br/>AUTOMATE · AUGMENT · ELIMINATE · NEW")]
+    end
+
+    subgraph AUDIT["7 · AUDIT & EXPLAINABILITY LAYER"]
+        direction LR
+        RUN[("analysis_run<br/>exact prompt · raw response<br/>provider · model · tokens · warnings")]
+        RSNIP[("analysis_run_snippet<br/>which sources · what score · which terms")]
+    end
+
+    INPUT --> RET
+    CORPUS --> RET --> SCORE
+    SCORE --> PB
+    INPUT --> PB
+    TPL --> PB
+    PB --> IFACE
+    SCHEMA --> IFACE
+    IFACE -.->|"swap a model here, nothing else changes"| CHAIN
+    CHAIN --> GEM
+    CHAIN -.->|"only on quota, outage or bad key"| GRQ
+    CHAIN --> PARSE --> VAL --> CITE --> REPAIR
+    REPAIR -->|"no — one repair retry only"| PB
+    REPAIR -->|"no, twice — honest 422"| FAIL(["Error naming the reason"])
+    REPAIR -->|yes| OUT
+    CITE -.->|"dropped citations recorded as warnings"| RUN
+    CHAIN --> RUN
+    SCORE --> RSNIP
+
+    classDef det fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b
+    classDef know fill:#fefce8,stroke:#ca8a04,color:#422006
+    classDef ai fill:#f0fdf4,stroke:#16a34a,color:#052e16
+    classDef guard fill:#fff7ed,stroke:#ea580c,color:#431407
+    classDef data fill:#ecfeff,stroke:#0891b2,color:#083344
+    classDef bad fill:#fef2f2,stroke:#dc2626,color:#450a0a
+
+    class PROC,ACTS,TPL,PB,SCHEMA det
+    class CORPUS,RET,SCORE know
+    class IFACE,CHAIN,GEM,GRQ ai
+    class PARSE,VAL,CITE,REPAIR guard
+    class OPP,FUT,INT,RUN,RSNIP data
+    class FAIL bad

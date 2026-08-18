@@ -7,6 +7,7 @@ wherever matches what you need.
 |---|---|
 | **[Architecture](architecture-diagram.md)** | The four layers, the eight-step analysis pipeline as a sequence diagram, the deployment topology, and why each boundary is where it is |
 | **[Data model](data-model.md)** | The ER diagram, every table and column, the current/transition/future split, and the SQL that walks a future step back to the evidence that produced it |
+| **[AI architecture](ai-architecture.md)** | Where the knowledge comes from, where the model sits, the guardrails on either side, and which decisions are software's rather than the model's |
 | **[Technical documentation](technical-documentation.md)** | The full reference — module map, API reference, pipeline internals, security model, every configuration variable, testing, operations and troubleshooting |
 | [Research sources](sources.md) | The 16 curated excerpts that ground every analysis, each with a verified URL, and the corpus's honest limitations |
 | [Demo script](demo-script.md) | A 10–15 minute walkthrough of the whole system, including the surprise-record test |
@@ -21,6 +22,7 @@ Markdown rather than redrawn by hand.
 | Diagram | Image | Source |
 |---|---|---|
 | System architecture | [PNG](diagrams/system-architecture.png) | [`.mmd`](diagrams/system-architecture.mmd) |
+| AI architecture | [PNG](diagrams/ai-architecture.png) | [`.mmd`](diagrams/ai-architecture.mmd) |
 | Analysis pipeline (sequence) | [PNG](diagrams/analysis-pipeline-sequence.png) | [`.mmd`](diagrams/analysis-pipeline-sequence.mmd) |
 | Deployment topology | [PNG](diagrams/deployment-topology.png) | [`.mmd`](diagrams/deployment-topology.mmd) |
 | Entity relationship diagram | [PNG](diagrams/entity-relationship-diagram.png) | [`.mmd`](diagrams/entity-relationship-diagram.mmd) |
