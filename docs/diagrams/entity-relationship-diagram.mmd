@@ -1,0 +1,140 @@
+erDiagram
+    APP_USER ||--o{ PROCESS : "owns (NULL = shared sample)"
+    PROCESS ||--o{ ACTIVITY : "has current steps"
+    PROCESS ||--o{ PROBLEM : "has pain points"
+    PROCESS ||--o{ AI_OPPORTUNITY : "has opportunities"
+    PROCESS ||--o{ FUTURE_ACTIVITY : "has future steps"
+    PROCESS ||--o{ AI_INTERVENTION : "has changes"
+    PROCESS ||--o{ ANALYSIS_RUN : "has pipeline runs"
+
+    ACTIVITY }o--o{ ROLE : "activity_role"
+    ACTIVITY }o--o{ SYSTEM_TOOL : "activity_system"
+    ACTIVITY ||--o{ PROBLEM : "may be pinned to"
+    ACTIVITY ||--o{ AI_OPPORTUNITY : "may target"
+
+    AI_OPPORTUNITY }o--o{ KNOWLEDGE_SNIPPET : "ai_opportunity_evidence"
+    AI_OPPORTUNITY ||--o{ AI_INTERVENTION : "justifies"
+    FUTURE_ACTIVITY ||--o{ AI_INTERVENTION : "is changed by"
+
+    ANALYSIS_RUN }o--o{ KNOWLEDGE_SNIPPET : "analysis_run_snippet"
+
+    APP_USER {
+        uuid id PK
+        varchar email UK "unique on lower(email)"
+        varchar password_hash "BCrypt"
+        varchar display_name
+        timestamptz created_at
+        timestamptz last_login_at
+    }
+
+    PROCESS {
+        uuid id PK
+        uuid owner_id FK "nullable - NULL means a shared sample"
+        varchar name
+        varchar industry
+        text description
+        varchar status "CURRENT_ONLY | ANALYZED"
+        varchar origin "SEED | USER"
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz last_analyzed_at
+    }
+
+    ACTIVITY {
+        uuid id PK
+        uuid process_id FK
+        varchar name
+        int sequence_order
+        text description
+        timestamptz created_at
+    }
+
+    ROLE {
+        uuid id PK
+        varchar name UK
+        timestamptz created_at
+    }
+
+    SYSTEM_TOOL {
+        uuid id PK
+        varchar name UK
+        varchar type
+        timestamptz created_at
+    }
+
+    PROBLEM {
+        uuid id PK
+        uuid process_id FK
+        uuid activity_id FK "nullable"
+        text description
+        varchar severity "LOW | MEDIUM | HIGH"
+        varchar source "SEED | AI_GENERATED"
+        timestamptz created_at
+    }
+
+    KNOWLEDGE_SNIPPET {
+        uuid id PK
+        varchar title UK
+        text snippet_text
+        varchar source_url
+        varchar source_type "LAW | GUIDANCE | STANDARD | RESEARCH | VENDOR | GENERAL_WEB"
+        varchar publisher
+        varchar tags
+        date retrieved_at
+        timestamptz created_at
+    }
+
+    AI_OPPORTUNITY {
+        uuid id PK
+        uuid process_id FK
+        uuid activity_id FK "nullable"
+        text description
+        varchar ai_capability
+        varchar automation_potential "LOW | MEDIUM | HIGH"
+        text business_benefit
+        text risk
+        text reasoning_note
+        int display_order
+        timestamptz created_at
+    }
+
+    FUTURE_ACTIVITY {
+        uuid id PK
+        uuid process_id FK
+        varchar name
+        int sequence_order
+        text description
+        text human_responsibility
+        text ai_responsibility
+        varchar responsibility_type "AI_AUTOMATED | AI_AUGMENTED | HUMAN_LED"
+        timestamptz created_at
+    }
+
+    AI_INTERVENTION {
+        uuid id PK
+        uuid process_id FK
+        uuid future_activity_id FK "nullable"
+        uuid related_ai_opportunity_id FK "nullable"
+        varchar intervention_type "AUTOMATE | AUGMENT | ELIMINATE | NEW"
+        text description
+        timestamptz created_at
+    }
+
+    ANALYSIS_RUN {
+        uuid id PK
+        uuid process_id FK
+        varchar status "RUNNING | SUCCEEDED | FAILED"
+        varchar provider
+        varchar model
+        text prompt_text
+        text raw_response
+        boolean repair_attempted
+        text validation_warnings
+        text provider_notes
+        text error_message
+        int prompt_tokens
+        int output_tokens
+        bigint duration_ms
+        timestamptz started_at
+        timestamptz finished_at
+    }

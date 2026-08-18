@@ -36,8 +36,9 @@ Current activities  →  Problems  →  AI opportunities  →  Future activities
 | Required | Where it is |
 |---|---|
 | **README / setup instructions** | This file — [Run it locally](#run-it-locally) for a from-scratch local run, [DEPLOYMENT.md](DEPLOYMENT.md) for the hosted one |
-| **Architecture documentation** | [docs/architecture-diagram.md](docs/architecture-diagram.md) — the four layers, the eight-step analysis pipeline, and the request path end to end |
-| **Database documentation** | [docs/data-model.md](docs/data-model.md) — every table and column, the current/transition/future split, and the SQL that walks a future step back to its evidence |
+| **Architecture documentation** | [docs/architecture-diagram.md](docs/architecture-diagram.md) — the four layers, the eight-step analysis pipeline, and the request path end to end. Exported as PNG in [docs/diagrams/](docs/diagrams/) |
+| **Technical documentation** | [docs/technical-documentation.md](docs/technical-documentation.md) — module map, full API reference, pipeline internals, security model, every configuration variable, testing and operations. [docs/](docs/) indexes everything |
+| **Database documentation** | [docs/data-model.md](docs/data-model.md) — every table and column, the current/transition/future split, and the SQL that walks a future step back to its evidence. ER diagram as PNG in [docs/diagrams/](docs/diagrams/) |
 | **AI tools / model disclosure** | [docs/ai-tools-disclosure.md](docs/ai-tools-disclosure.md) — how this was built with AI assistance, what was generated, what was corrected, and what the assistant got wrong |
 | **Library disclosure** | [LIBRARIES.md](LIBRARIES.md) — every dependency, its licence, and why it is there |
 | **Sample data** | [V2__seed_data.sql](backend/src/main/resources/db/migration/V2__seed_data.sql) — 6 processes, 32 activities, 18 problems, 16 roles, 13 systems. Applied by Flyway at first start, so there is no manual load step. [data-seed.sql](data-seed.sql) documents the contents and how to run it by hand |
@@ -400,8 +401,11 @@ frontend/src/
   lib/                       Typed API client, formatting, the resource-loading hook
 
 docs/
+  README.md                  Index of every document
   architecture-diagram.md    Layer diagram and pipeline sequence diagram
   data-model.md              ER diagram and the join path behind the chain
+  technical-documentation.md Module map, API reference, config, security, operations
+  diagrams/                  Each diagram as a PNG, with its Mermaid source beside it
   sources.md                 The 16 curated sources and why the research layer works this way
   demo-script.md             10–15 minute walkthrough
   ai-tools-disclosure.md     How AI tooling was used to build this
@@ -409,5 +413,8 @@ docs/
 
 ## Documentation
 
-Every document is indexed in [Submission deliverables](#submission-deliverables) at the top of this
-file, alongside the [deployment guide](DEPLOYMENT.md).
+Everything is indexed in **[docs/README.md](docs/README.md)**, and the required items are listed in
+[Submission deliverables](#submission-deliverables) at the top of this file alongside the
+[deployment guide](DEPLOYMENT.md). The three most substantial documents are
+[architecture](docs/architecture-diagram.md), [data model](docs/data-model.md) and
+[technical documentation](docs/technical-documentation.md).

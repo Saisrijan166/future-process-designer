@@ -1,0 +1,6 @@
+flowchart LR
+    B(["Browser"]) -->|HTTPS| V["Vercel<br/>Next.js static + edge<br/><i>free hobby tier</i>"]
+    B -->|"HTTPS · REST"| R["Render<br/>Docker web service<br/><i>free tier, sleeps when idle</i>"]
+    R -->|"TLS · JDBC"| N[("Neon<br/>PostgreSQL<br/><i>free serverless tier</i>")]
+    R -->|HTTPS| G(["Google AI Studio<br/><i>free tier · primary</i>"])
+    R -.->|"HTTPS, on failure"| GQ(["Groq Cloud<br/><i>free tier · fallback</i>"])

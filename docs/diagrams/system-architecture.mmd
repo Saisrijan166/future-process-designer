@@ -1,0 +1,77 @@
+flowchart TB
+    subgraph UI["UI — Next.js 16 · React 19 · TypeScript · Tailwind 4"]
+        direction LR
+        DASH["/ — Process list"]
+        NEW["/processes/new — Create a process"]
+        DETAIL["/processes/[id] — Comparison strip<br/>Current · Transition · Future · Evidence"]
+        EVID["/evidence — Curated corpus"]
+    end
+
+    subgraph API["API — Spring Boot 3.5 · Java 21"]
+        direction LR
+        PC["ProcessController<br/>CRUD + comparison"]
+        AC["AnalysisController<br/>analyze + run trace"]
+        EC["EvidenceController"]
+        LC["LookupController"]
+        AC2["AuthController<br/>register · login · me"]
+        SEC["SecurityFilterChain<br/>stateless JWT · BCrypt"]
+        ACC["ProcessAccessService<br/><i>the one place ownership is decided</i>"]
+        GEH["GlobalExceptionHandler<br/>RFC 7807 problem details"]
+    end
+
+    subgraph AI["AI INTELLIGENCE LAYER"]
+        direction TB
+        AS["AnalysisService<br/><i>orchestrates the pipeline</i>"]
+        KRS["KnowledgeRetrievalService<br/>TF-IDF-weighted keyword match"]
+        PB["PromptBuilder + PromptTemplateRenderer<br/>templates in resources/prompts/"]
+        AP["AiProvider <i>(interface)</i>"]
+        FB["FallbackAiProvider<br/><i>tries each in order</i>"]
+        GP["GeminiProvider<br/><i>primary</i>"]
+        GQ["GroqProvider<br/><i>fallback</i>"]
+        PARSE["AnalysisResponseParser<br/>fence stripping · brace matching"]
+        VAL["AnalysisPayloadValidator<br/>enum coercion · caps · drops"]
+        PERS["AnalysisPersistenceService<br/>FK resolution · idempotent replace"]
+    end
+
+    subgraph DATA["DATA & KNOWLEDGE LAYER — PostgreSQL (Neon free tier)"]
+        direction LR
+        CUR[("CURRENT<br/>process · activity · problem<br/>role · system_tool")]
+        TRANS[("TRANSITION<br/>ai_opportunity<br/>ai_opportunity_evidence")]
+        FUT[("FUTURE<br/>future_activity<br/>ai_intervention")]
+        KNOW[("KNOWLEDGE<br/>knowledge_snippet")]
+        AUDIT[("AUDIT<br/>analysis_run<br/>analysis_run_snippet")]
+    end
+
+    UI -->|"REST / JSON + Bearer token"| SEC
+    SEC --> API
+    AC2 --> DATA
+    PC --> ACC
+    AC --> ACC
+    PC --> DATA
+    EC --> KNOW
+    LC --> DATA
+    AC --> AS
+
+    AS --> KRS --> KNOW
+    AS --> PB
+    AS --> AP
+    AP -.->|"the only seam to a model"| FB
+    FB --> GP
+    FB -.->|"only if Gemini fails"| GQ
+    GP -->|"HTTPS"| GEMINI(["Google AI Studio<br/>gemini-3.1-flash-lite · free tier"])
+    GQ -->|"HTTPS"| GROQ(["Groq Cloud<br/>llama-3.3-70b · free tier"])
+    AS --> PARSE --> VAL --> PERS
+    PERS --> CUR & TRANS & FUT
+    AS --> AUDIT
+
+    classDef ui fill:#eef2ff,stroke:#6366f1,color:#1e1b4b
+    classDef api fill:#ecfeff,stroke:#0891b2,color:#083344
+    classDef ai fill:#f0fdf4,stroke:#16a34a,color:#052e16
+    classDef data fill:#fefce8,stroke:#ca8a04,color:#422006
+    classDef ext fill:#fdf2f8,stroke:#db2777,color:#500724
+
+    class DASH,NEW,DETAIL,EVID ui
+    class PC,AC,AC2,SEC,ACC,EC,LC,GEH api
+    class AS,KRS,PB,AP,FB,GP,GQ,PARSE,VAL,PERS ai
+    class CUR,TRANS,FUT,KNOW,AUDIT data
+    class GEMINI,GROQ ext

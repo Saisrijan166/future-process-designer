@@ -2,6 +2,13 @@
 
 Four real layers, each running as its own process, each replaceable without rewriting the others.
 
+> **Diagrams as images.** Every diagram below is also exported as a full-resolution PNG in
+> [`docs/diagrams/`](diagrams/) — [system architecture](diagrams/system-architecture.png) ·
+> [analysis pipeline](diagrams/analysis-pipeline-sequence.png) ·
+> [deployment topology](diagrams/deployment-topology.png). The Mermaid source for each is checked
+> in beside it as a `.mmd` file, so the diagrams are regenerated from the same text that renders on
+> this page rather than redrawn by hand.
+
 ```mermaid
 flowchart TB
     subgraph UI["UI — Next.js 16 · React 19 · TypeScript · Tailwind 4"]

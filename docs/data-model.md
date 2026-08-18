@@ -6,6 +6,9 @@ queried, counted and compared.
 
 Defined in [`V1__baseline_schema.sql`](../backend/src/main/resources/db/migration/V1__baseline_schema.sql).
 
+> **The ER diagram as an image:** [`diagrams/entity-relationship-diagram.png`](diagrams/entity-relationship-diagram.png)
+> — full resolution, with the Mermaid source checked in beside it.
+
 ## Entity relationship diagram
 
 ```mermaid
