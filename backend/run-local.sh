@@ -5,8 +5,10 @@
 #   ./run-local.sh          run from source, with restart-on-change
 #   ./run-local.sh jar      build a jar and run that (closer to production)
 #
-# Spring Boot has no built-in .env support, so something has to read the file.
-# A five-line script beats adding a dependency for it.
+# The app also imports backend/.env by itself (see application.yml), so a plain
+# `./mvnw spring-boot:run` works too. This script stays because it fails loudly
+# on a missing file and prints what it is about to connect to, which is worth
+# having when a run does not do what you expected.
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -28,12 +30,20 @@ if [ -z "${DATABASE_URL:-}" ]; then
     exit 1
 fi
 
-if [ -z "${GEMINI_API_KEY:-}" ]; then
-    echo "warning: GEMINI_API_KEY is empty — the app will start, but Analyze will return 503." >&2
+if [ -z "${GROQ_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
+    echo "warning: no provider key set — the app will start, but Analyze will return 503." >&2
+elif [ -z "${GROQ_API_KEY:-}" ]; then
+    echo "warning: GROQ_API_KEY is empty — every stage falls through to Gemini, which is slower" >&2
+    echo "         and has a much smaller free allowance." >&2
+elif [ -z "${GEMINI_API_KEY:-}" ]; then
+    echo "note: GEMINI_API_KEY is empty. Runs still work, but the high-volume stages cannot" >&2
+    echo "      alternate into a second provider, so expect a slower analysis." >&2
 fi
 
 echo "Database : ${DATABASE_URL}"
-echo "Model    : ${GEMINI_MODEL:-gemini-2.5-flash}"
+echo "Provider : ${AI_PROVIDER:-groq} -> ${GROQ_MODEL:-openai/gpt-oss-120b}"
+echo "Fallback : ${AI_FALLBACK_PROVIDERS:-gemini}"
+echo "Pipeline : ${ANALYSIS_PIPELINE:-staged}, research ${RESEARCH_ENABLED:-true}"
 echo "CORS     : ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000}"
 echo
 

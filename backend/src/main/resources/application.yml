@@ -2,6 +2,14 @@ spring:
   application:
     name: ai-future-process-designer
 
+  # Spring Boot does not read .env files, so a plain `./mvnw spring-boot:run` used to start against
+  # the defaults below — which, if a database happened to exist at that address, meant booting
+  # successfully against the wrong one. Importing the file makes the documented local setup work
+  # whichever way the app is launched. `optional:` because in production there is no file: Render,
+  # Vercel and Docker all inject real environment variables, and those still win over it.
+  config:
+    import: optional:file:./.env[.properties]
+
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/future_designer}
     username: ${DATABASE_USERNAME:postgres}

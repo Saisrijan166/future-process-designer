@@ -259,6 +259,13 @@ class ProcessApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("an endpoint that does not exist is 404, not 500")
+    void unknownPathIsNotFound() {
+        assertThat(client.get("/api/nothing-here", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("rejects a malformed UUID with 400 rather than 500")
     void rejectsMalformedId() {
         assertThat(client.get("/api/processes/not-a-uuid", String.class).getStatusCode())

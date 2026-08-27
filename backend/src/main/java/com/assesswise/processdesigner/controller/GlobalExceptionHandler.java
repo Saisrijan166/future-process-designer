@@ -27,6 +27,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Turns every failure into an RFC 7807 problem document with a message a human can act on.
@@ -58,6 +59,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException e, HttpServletRequest request) {
         return problem(HttpStatus.NOT_FOUND, "Not found", e.getMessage(), request);
+    }
+
+    /**
+     * A URL that matches no handler.
+     *
+     * <p>Without this it falls to the catch-all below, which answers 500 and logs a stack trace —
+     * so a mistyped path, a stale frontend build or an automated probe reads as a server fault in
+     * the logs, and the caller is told to check them.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ProblemDetail handleNoHandler(NoResourceFoundException e, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Not found",
+                "There is no endpoint at " + request.getRequestURI() + ".", request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

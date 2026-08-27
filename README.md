@@ -164,16 +164,19 @@ Any PostgreSQL 13 or newer works either way. The schema needs no extensions.
 
 ```bash
 cd backend
-cp .env.example .env          # then put your Gemini key in GEMINI_API_KEY
-./run-local.sh                # loads .env and starts the app
+cp .env.example .env          # then put your Groq key in GROQ_API_KEY
+./run-local.sh                # prints what it is connecting to, then starts the app
 ```
 
-`run-local.sh` exists because Spring Boot does not read `.env` files by itself. If you would rather
-not use it:
+Or plainly, which works the same way — the application imports `backend/.env` itself:
 
 ```bash
-set -a; source .env; set +a; ./mvnw spring-boot:run
+cd backend && ./mvnw spring-boot:run
 ```
+
+`run-local.sh` is still the better one to use while developing: it fails immediately if `.env` is
+missing, warns if a provider key is empty, and prints the database, the provider chain and the
+pipeline mode before it starts, which is what you want to see when a run does something unexpected.
 
 Flyway creates the schema and loads the sample data on first start — there are no manual SQL steps.
 The service is up when <http://localhost:8080/actuator/health> returns `{"status":"UP"}`.
