@@ -51,6 +51,14 @@ public class Problem {
     @Column(name = "source", nullable = false, length = 20)
     private ProblemSource source = ProblemSource.AI_GENERATED;
 
+    /** Why it happens, as distinct from what happens. The diagnosis stage is asked for both. */
+    @Column(name = "root_cause", columnDefinition = "text")
+    private String rootCause;
+
+    /** What in the supplied process description or research supports this being real. */
+    @Column(name = "evidence_note", columnDefinition = "text")
+    private String evidenceNote;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

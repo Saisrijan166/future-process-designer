@@ -57,6 +57,21 @@ public class FutureActivity {
     @Column(name = "responsibility_type", nullable = false, length = 20)
     private ResponsibilityType responsibilityType;
 
+    /** How work passes between the person and the model at this step, in operational terms. */
+    @Column(name = "handoff_note", columnDefinition = "text")
+    private String handoffNote;
+
+    /** What this step does when the AI part is wrong or unavailable. Every step needs an answer. */
+    @Column(name = "failure_mode", columnDefinition = "text")
+    private String failureMode;
+
+    /** The current-state activity this replaces, so current and future can be diffed. */
+    @Column(name = "replaces_activity", length = 250)
+    private String replacesActivity;
+
+    @Column(name = "cycle_time_note", length = 400)
+    private String cycleTimeNote;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

@@ -66,6 +66,29 @@ public class AiOpportunity {
     @Column(name = "reasoning_note", columnDefinition = "text")
     private String reasoningNote;
 
+    /** The underlying cause this addresses, not just the symptom it is attached to. */
+    @Column(name = "root_cause", columnDefinition = "text")
+    private String rootCause;
+
+    /**
+     * What a person still checks, and when. Required in the prompt contract: a design that hands a
+     * decision affecting a candidate entirely to a model is not one this application will present
+     * without saying where the human stayed in the loop.
+     */
+    @Column(name = "human_oversight", columnDefinition = "text")
+    private String humanOversight;
+
+    /** The data this needs to exist before it can work at all. */
+    @Column(name = "data_requirement", columnDefinition = "text")
+    private String dataRequirement;
+
+    @Column(name = "success_metric", length = 400)
+    private String successMetric;
+
+    /** 0-100, derived from the verified claims cited below. Zero means nothing backs this up. */
+    @Column(name = "grounding_score", nullable = false)
+    private int groundingScore;
+
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
@@ -78,6 +101,19 @@ public class AiOpportunity {
             joinColumns = @JoinColumn(name = "ai_opportunity_id"),
             inverseJoinColumns = @JoinColumn(name = "knowledge_snippet_id"))
     private Set<KnowledgeSnippet> evidence = new LinkedHashSet<>();
+
+    /**
+     * Live-research claims this opportunity cites. The successor to {@link #evidence}: a quoted,
+     * verified excerpt from a source retrieved for this specific process, rather than one of a
+     * fixed set of curated paragraphs. Both are kept because the curated corpus is still the
+     * fallback when live research is disabled or every connector fails.
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "ai_opportunity_claim",
+            joinColumns = @JoinColumn(name = "ai_opportunity_id"),
+            inverseJoinColumns = @JoinColumn(name = "evidence_claim_id"))
+    private Set<EvidenceClaim> citedClaims = new LinkedHashSet<>();
 
     @PrePersist
     void onCreate() {

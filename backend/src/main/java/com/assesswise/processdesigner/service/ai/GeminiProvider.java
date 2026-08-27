@@ -77,8 +77,9 @@ public class GeminiProvider implements AiProvider {
                             + "(free key from https://aistudio.google.com/apikey) and restart the service.");
         }
 
-        String body = buildRequestBody(request);
-        String path = "/models/%s:generateContent".formatted(config.model());
+        String model = request.model() == null || request.model().isBlank() ? config.model() : request.model();
+        String body = buildRequestBody(request, model);
+        String path = "/models/%s:generateContent".formatted(model);
         int attempts = Math.max(1, config.maxTransportRetries());
 
         AiProviderException lastFailure = null;
@@ -94,7 +95,7 @@ public class GeminiProvider implements AiProvider {
                         .exchange((httpRequest, httpResponse) -> handleResponse(httpResponse), false);
 
                 long durationMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
-                return parseCompletion(response, durationMs, request.purpose());
+                return parseCompletion(response, durationMs, request.purpose(), model);
             } catch (AiProviderException e) {
                 lastFailure = e;
                 if (!e.isRetryable() || attempt == attempts) {
@@ -128,19 +129,25 @@ public class GeminiProvider implements AiProvider {
             return payload;
         }
         String detail = extractApiErrorMessage(payload);
-        boolean retryable = status == 429 || status >= 500;
+        if (status == 429) {
+            throw AiProviderException.rateLimited("Gemini free-tier quota exceeded (429): " + detail, 30);
+        }
+        boolean retryable = status >= 500;
         String message = switch (status) {
             case 400 -> "Gemini rejected the request (400): " + detail;
             case 401, 403 -> "Gemini rejected the API key (" + status + "): " + detail;
             case 404 -> "Model '" + config.model() + "' was not found (404): " + detail;
-            case 429 -> "Gemini free-tier quota exceeded (429): " + detail;
             default -> "Gemini returned HTTP " + status + ": " + detail;
         };
         throw new AiProviderException(message, retryable);
     }
 
-    private String buildRequestBody(AiRequest request) {
+    private String buildRequestBody(AiRequest request, String model) {
         ObjectNode root = objectMapper.createObjectNode();
+
+        if (request.systemPrompt() != null && !request.systemPrompt().isBlank()) {
+            root.putObject("systemInstruction").putArray("parts").addObject().put("text", request.systemPrompt());
+        }
 
         ArrayNode contents = root.putArray("contents");
         ObjectNode userTurn = contents.addObject();
@@ -148,10 +155,17 @@ public class GeminiProvider implements AiProvider {
         userTurn.putArray("parts").addObject().put("text", request.prompt());
 
         ObjectNode generationConfig = root.putObject("generationConfig");
-        generationConfig.put("temperature", config.temperature());
-        generationConfig.put("maxOutputTokens", config.maxOutputTokens());
+        generationConfig.put("temperature",
+                request.temperature() == null ? config.temperature() : request.temperature());
+        generationConfig.put("maxOutputTokens",
+                request.maxOutputTokens() == null ? config.maxOutputTokens() : request.maxOutputTokens());
         generationConfig.put("responseMimeType", MediaType.APPLICATION_JSON_VALUE);
-        if (config.structuredOutput() && request.enforceJsonSchema()) {
+        // A caller-supplied schema wins over the built-in analysis schema: the multi-stage pipeline
+        // asks for a different shape at every stage, and constraining stage four's output to stage
+        // ten's schema would fail every time.
+        if (config.structuredOutput() && request.responseSchema() != null) {
+            generationConfig.set("responseSchema", request.responseSchema());
+        } else if (config.structuredOutput() && request.enforceJsonSchema()) {
             generationConfig.set("responseSchema", AnalysisJsonSchema.build());
         }
         if (config.thinkingBudget() >= 0) {
@@ -165,7 +179,7 @@ public class GeminiProvider implements AiProvider {
         }
     }
 
-    private AiCompletion parseCompletion(String responseBody, long durationMs, String purpose) {
+    private AiCompletion parseCompletion(String responseBody, long durationMs, String purpose, String model) {
         JsonNode root;
         try {
             root = objectMapper.readTree(responseBody);
@@ -207,10 +221,10 @@ public class GeminiProvider implements AiProvider {
         Integer outputTokens = usage.hasNonNull("candidatesTokenCount") ? usage.get("candidatesTokenCount").asInt() : null;
 
         log.info("Gemini {} completed in {}ms (model={}, finishReason={}, promptTokens={}, outputTokens={})",
-                purpose, durationMs, config.model(), finishReason, promptTokens, outputTokens);
+                purpose, durationMs, model, finishReason, promptTokens, outputTokens);
 
         return AiCompletion.of(text.toString(), promptTokens, outputTokens, durationMs, finishReason,
-                PROVIDER_NAME, config.model());
+                PROVIDER_NAME, model);
     }
 
     private String extractApiErrorMessage(String payload) {

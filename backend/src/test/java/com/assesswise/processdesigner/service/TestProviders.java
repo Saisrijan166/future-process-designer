@@ -27,6 +27,6 @@ public final class TestProviders {
     }
 
     public static AppProperties.Groq groq(String apiKey, String model, String baseUrl, int retries) {
-        return new AppProperties.Groq(apiKey, model, baseUrl, 0.2, 4096, 5, 10, true, retries);
+        return new AppProperties.Groq(apiKey, model, baseUrl, 0.2, 4096, 5, 10, true, retries, "groq/compound");
     }
 }

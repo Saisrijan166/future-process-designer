@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -83,6 +84,31 @@ public class AnalysisRun {
     @Column(name = "duration_ms")
     private Long durationMs;
 
+    /** Which pipeline produced this run: "1-single-call" or "2-staged". */
+    @Column(name = "pipeline_version", length = 20)
+    private String pipelineVersion;
+
+    @Column(name = "stage_count", nullable = false)
+    private int stageCount;
+
+    /** Totals across every stage, so the cost of a whole run is one column rather than a sum. */
+    @Column(name = "total_prompt_tokens", nullable = false)
+    private int totalPromptTokens;
+
+    @Column(name = "total_output_tokens", nullable = false)
+    private int totalOutputTokens;
+
+    /** Stages served from the response cache — the ones that cost no quota at all. */
+    @Column(name = "cache_hit_count", nullable = false)
+    private int cacheHitCount;
+
+    /** Time spent waiting for free-tier token budget rather than for a model to think. */
+    @Column(name = "throttled_ms", nullable = false)
+    private long throttledMs;
+
+    @Column(name = "research_run_id")
+    private UUID researchRunId;
+
     @Column(name = "started_at", nullable = false)
     private Instant startedAt = Instant.now();
 
@@ -92,8 +118,17 @@ public class AnalysisRun {
     @OneToMany(mappedBy = "analysisRun", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AnalysisRunSnippet> retrievedSnippets = new ArrayList<>();
 
+    @OneToMany(mappedBy = "analysisRun", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder asc")
+    private List<AnalysisStage> stages = new ArrayList<>();
+
     public void addRetrievedSnippet(AnalysisRunSnippet snippet) {
         snippet.setAnalysisRun(this);
         retrievedSnippets.add(snippet);
+    }
+
+    public void addStage(AnalysisStage stage) {
+        stage.setAnalysisRun(this);
+        stages.add(stage);
     }
 }

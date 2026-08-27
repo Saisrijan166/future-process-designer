@@ -1,6 +1,7 @@
 package com.assesswise.processdesigner.config;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -14,6 +15,7 @@ public record AppProperties(
         @DefaultValue Cors cors,
         @DefaultValue Analysis analysis,
         @DefaultValue Ai ai,
+        @DefaultValue Research research,
         @DefaultValue Auth auth) {
 
     public record Auth(
@@ -52,8 +54,16 @@ public record AppProperties(
             @DefaultValue("30") int maxOpportunities,
             @DefaultValue("30") int maxFutureActivities,
             @DefaultValue("60") int maxInterventions,
+            @DefaultValue("40") int maxRisks,
+            @DefaultValue("30") int maxRoadmapItems,
             /** Minimum token-overlap score for fuzzy matching a model-supplied name to a stored row. */
             @DefaultValue("0.34") double nameMatchThreshold,
+            /**
+             * Opportunities that cite no verified evidence claim are kept but flagged, not deleted:
+             * an ungrounded idea can still be a good idea, and hiding it would be less honest than
+             * showing it with its grounding score at zero. Set to true to drop them instead.
+             */
+            @DefaultValue("false") boolean dropUngroundedOpportunities,
             @DefaultValue RateLimit rateLimit) {}
 
     public record RateLimit(
@@ -61,18 +71,45 @@ public record AppProperties(
             /** Protects the free-tier AI quota from accidental hammering during a demo. */
             @DefaultValue("20") int permitsPerMinute) {}
 
+    // =================================================================================
+    // AI
+    // =================================================================================
+
     public record Ai(
             /** The provider tried first. "stub" disables live providers entirely (used by tests). */
-            @DefaultValue("gemini") String provider,
+            @DefaultValue("groq") String provider,
             /**
              * Providers tried, in order, when the primary fails — typically because a free-tier
              * quota is exhausted. Empty means no failover: the first failure is the final answer.
              */
-            @DefaultValue({"groq"}) List<String> fallbackProviders,
+            @DefaultValue({"gemini"}) List<String> fallbackProviders,
+            /**
+             * Per-task model routing. Key is the {@code AiTask} id, value an ordered,
+             * comma-separated candidate list of {@code provider:model} (an empty model means the
+             * provider's own default). A task with no entry falls back to the provider chain above.
+             *
+             * <p>This is the single most important free-tier lever in the application. Groq's rate
+             * limits are enforced <em>per model</em>, so routing different pipeline stages to
+             * different models multiplies the usable throughput instead of queueing everything
+             * behind one bucket.
+             */
+            @DefaultValue Map<String, String> routing,
+            /** Persistent prompt→response cache. Re-running an unchanged stage then costs nothing. */
+            @DefaultValue("true") boolean cacheEnabled,
+            @DefaultValue("72") int cacheTtlHours,
+            /**
+             * How long a stage will wait for a model's token bucket to refill before giving up and
+             * trying the next candidate model. Groq's free tier is 8k tokens/minute on most models,
+             * so a short wait is normal and a long one means the pipeline should route elsewhere.
+             */
+            @DefaultValue("35") int maxRateLimitWaitSeconds,
             @DefaultValue Gemini gemini,
-            @DefaultValue Groq groq) {}
+            @DefaultValue Groq groq,
+            @DefaultValue OpenAiCompatible cerebras,
+            @DefaultValue OpenAiCompatible openrouter,
+            @DefaultValue OpenAiCompatible ollama) {}
 
-    /** Fields common to every HTTP-based provider, so the two configs stay comparable. */
+    /** Fields common to every HTTP-based provider, so the configs stay comparable. */
     public interface ProviderConfig {
         String apiKey();
 
@@ -122,19 +159,114 @@ public record AppProperties(
     public record Groq(
             /** Groq Cloud API key. Free tier, generous daily limits. Supply via GROQ_API_KEY. */
             @DefaultValue("") String apiKey,
-            @DefaultValue("llama-3.3-70b-versatile") String model,
+            /**
+             * The default model for tasks with no explicit route. gpt-oss-120b is the strongest
+             * model on Groq's free tier that still fits its 8k tokens-per-minute budget when the
+             * output ceiling is kept modest.
+             */
+            @DefaultValue("openai/gpt-oss-120b") String model,
             @DefaultValue("https://api.groq.com/openai/v1") String baseUrl,
             @DefaultValue("0.2") double temperature,
             /**
-             * Deliberately lower than Gemini's. Groq reserves the requested maximum against the
-             * free tier's tokens-per-minute budget, so asking for 8192 gets the larger models
-             * rejected before they even run.
+             * Groq reserves the requested maximum against the free tier's tokens-per-minute
+             * budget, so asking for more than a stage can possibly need gets the request rejected
+             * before it runs. Individual tasks raise this when they legitimately need to.
              */
             @DefaultValue("4096") int maxOutputTokens,
             @DefaultValue("20") int connectTimeoutSeconds,
             @DefaultValue("120") int readTimeoutSeconds,
             /** Groq's OpenAI-compatible JSON mode. The local validator runs either way. */
             @DefaultValue("true") boolean structuredOutput,
-            @DefaultValue("2") int maxTransportRetries)
+            @DefaultValue("2") int maxTransportRetries,
+            /**
+             * The agentic model used as a research connector. {@code groq/compound} runs its own
+             * server-side web search and returns the pages it read, which the research layer
+             * stores and quote-verifies like any other source.
+             */
+            @DefaultValue("groq/compound") String researchModel)
             implements ProviderConfig {}
+
+    /**
+     * Any other OpenAI-compatible endpoint: Cerebras, OpenRouter, a local Ollama, Together.
+     * Disabled unless a base URL and (where the host needs one) a key are supplied, so adding a
+     * provider is a configuration change rather than a code change.
+     */
+    public record OpenAiCompatible(
+            @DefaultValue("false") boolean enabled,
+            @DefaultValue("") String apiKey,
+            @DefaultValue("") String model,
+            @DefaultValue("") String baseUrl,
+            @DefaultValue("0.2") double temperature,
+            @DefaultValue("4096") int maxOutputTokens,
+            @DefaultValue("20") int connectTimeoutSeconds,
+            @DefaultValue("120") int readTimeoutSeconds,
+            @DefaultValue("true") boolean structuredOutput,
+            @DefaultValue("2") int maxTransportRetries,
+            /** A local Ollama needs no key; a hosted endpoint does. */
+            @DefaultValue("true") boolean requiresApiKey)
+            implements ProviderConfig {
+
+        @Override
+        public boolean isConfigured() {
+            if (!enabled || baseUrl() == null || baseUrl().isBlank() || model() == null || model().isBlank()) {
+                return false;
+            }
+            return !requiresApiKey || (apiKey() != null && !apiKey().isBlank());
+        }
+    }
+
+    // =================================================================================
+    // RESEARCH
+    // =================================================================================
+
+    public record Research(
+            /** Turn the live research layer off to fall back to the curated snippet corpus alone. */
+            @DefaultValue("true") boolean enabled,
+            /** Connector ids to run, in order. Unknown ids are logged and ignored. */
+            @DefaultValue({
+                        "bing-web", "google-news", "bing-news", "wikipedia", "openalex",
+                        "crossref", "arxiv", "europepmc", "hackernews", "stackexchange",
+                        "groq-agent"
+                    })
+            List<String> connectors,
+            /** How many search queries the planner is allowed to produce for one run. */
+            @DefaultValue("6") int maxQueries,
+            /** Results kept per connector per query before ranking. */
+            @DefaultValue("6") int hitsPerQuery,
+            /** How many of the highest-ranked hits get fetched in full and read. */
+            @DefaultValue("10") int maxDocuments,
+            /** Ceiling on extracted claims per run, so one run cannot flood the evidence table. */
+            @DefaultValue("48") int maxClaims,
+            /** Characters of extracted body text kept per document. */
+            @DefaultValue("36000") int maxDocumentChars,
+            /** Characters of a document handed to the claim extractor in one call. */
+            @DefaultValue("9000") int extractionChunkChars,
+            @DefaultValue("12") int fetchTimeoutSeconds,
+            @DefaultValue("6") int fetchConcurrency,
+            /** Cached page bodies are reused for this long — the same source in two runs is fetched once. */
+            @DefaultValue("168") int documentCacheTtlHours,
+            /** Cached search results are reused for this long. Keeps a demo re-run instant. */
+            @DefaultValue("12") int searchCacheTtlHours,
+            @DefaultValue("true") boolean respectRobotsTxt,
+            @DefaultValue("AssessWiseResearchBot/2.0 (+https://github.com/assesswise/future-designer)")
+            String userAgent,
+            /**
+             * Sites that block server-side fetching (Cloudflare, paywalls) are retried through a
+             * public reader that returns the article as text. Disable to keep every request direct.
+             */
+            @DefaultValue("true") boolean readerFallbackEnabled,
+            @DefaultValue("https://r.jina.ai/") String readerBaseUrl,
+            /** Optional keyed search providers. Used only when a key is present. */
+            @DefaultValue KeyedSearch tavily,
+            @DefaultValue KeyedSearch brave,
+            @DefaultValue KeyedSearch serper) {}
+
+    public record KeyedSearch(
+            @DefaultValue("") String apiKey,
+            @DefaultValue("") String baseUrl) {
+
+        public boolean isConfigured() {
+            return apiKey != null && !apiKey.isBlank();
+        }
+    }
 }
