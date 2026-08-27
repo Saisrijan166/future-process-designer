@@ -17,6 +17,28 @@ erDiagram
     FUTURE_ACTIVITY ||--o{ AI_INTERVENTION : "is changed by"
 
     ANALYSIS_RUN }o--o{ KNOWLEDGE_SNIPPET : "analysis_run_snippet"
+    ANALYSIS_RUN ||--o{ ANALYSIS_STAGE : "one row per stage"
+    ANALYSIS_RUN ||--o| ANALYSIS_SCORECARD : "is measured by"
+    ANALYSIS_RUN ||--o| RESEARCH_RUN : "used this research"
+
+    PROCESS ||--o{ RESEARCH_RUN : "has research passes"
+    RESEARCH_RUN ||--o{ RESEARCH_QUERY : "planned searches"
+    RESEARCH_RUN ||--o{ RESEARCH_SOURCE : "found sources"
+    RESEARCH_QUERY ||--o{ RESEARCH_SOURCE : "which search found it"
+    WEB_DOCUMENT ||--o{ RESEARCH_SOURCE : "cached page text, shared across runs"
+    RESEARCH_SOURCE ||--o{ EVIDENCE_CLAIM : "yielded claims"
+    EVIDENCE_CLAIM ||--o{ CLAIM_RELATION : "agrees or disagrees with"
+
+    AI_OPPORTUNITY }o--o{ EVIDENCE_CLAIM : "ai_opportunity_claim (the citation)"
+    AI_OPPORTUNITY ||--o| OPPORTUNITY_SCORE : "reviewed by a second model"
+    AI_OPPORTUNITY ||--o{ IMPACT_ESTIMATE : "is worth"
+    AI_OPPORTUNITY ||--o{ RISK_ITEM : "carries risks"
+    AI_OPPORTUNITY ||--o{ ROADMAP_ITEM : "is delivered by"
+    RISK_ITEM }o--o{ EVIDENCE_CLAIM : "risk_item_claim"
+
+    PROCESS ||--o{ IMPACT_ESTIMATE : "has estimates"
+    PROCESS ||--o{ RISK_ITEM : "has a risk register"
+    PROCESS ||--o{ ROADMAP_ITEM : "has a delivery plan"
 
     APP_USER {
         uuid id PK
@@ -135,6 +157,205 @@ erDiagram
         int prompt_tokens
         int output_tokens
         bigint duration_ms
+        varchar pipeline_version "2-staged | 1-single-call"
+        int stage_count
+        int total_prompt_tokens
+        int total_output_tokens
+        int cache_hit_count
+        bigint throttled_ms "time spent waiting on free-tier budget"
+        uuid research_run_id FK "nullable"
         timestamptz started_at
         timestamptz finished_at
+    }
+
+    ANALYSIS_STAGE {
+        uuid id PK
+        uuid analysis_run_id FK
+        varchar stage_id "intake | diagnosis | research | ..."
+        varchar status "RUNNING | SUCCEEDED | DEGRADED | SKIPPED | FAILED"
+        int display_order
+        varchar provider
+        varchar model "which model actually answered"
+        int prompt_tokens
+        int output_tokens
+        bigint duration_ms
+        bigint waited_ms "time queued behind a token bucket"
+        boolean cached "served from ai_cache at no quota cost"
+        int attempt_count
+        text summary
+        text prompt_text "the exact prompt sent"
+        text response_text "the exact text returned"
+        text error_message
+        text notes
+    }
+
+    ANALYSIS_SCORECARD {
+        uuid analysis_run_id PK "shares the run's key"
+        uuid process_id FK
+        int coverage_score "share of today's activities addressed"
+        int grounding_score "share of recommendations citing a verified quote"
+        int corroboration_score "share of evidence a second domain agreed with"
+        int agreement_score "how the reviewing model scored the proposals"
+        int specificity_score
+        int traceability_score
+        int overall_score
+        varchar grade
+        text metrics "the raw counts, as JSON"
+    }
+
+    RESEARCH_RUN {
+        uuid id PK
+        uuid process_id FK
+        uuid analysis_run_id "the analysis this was gathered for"
+        varchar status "RUNNING | SUCCEEDED | PARTIAL | FAILED | SKIPPED"
+        varchar connectors_used
+        int query_count
+        int hit_count
+        int document_count
+        int claim_count
+        int verified_claim_count "quotes located in the stored page text"
+        int contradiction_count
+        int distinct_domain_count
+        int cache_hit_count
+        text notes "one line per connector that failed or was skipped"
+    }
+
+    RESEARCH_QUERY {
+        uuid id PK
+        uuid research_run_id FK
+        varchar query_text
+        varchar intent "DOMAIN_BASELINE | REGULATION | BENCHMARK | ..."
+        varchar origin "MODEL | TEMPLATE"
+        int hit_count
+    }
+
+    WEB_DOCUMENT {
+        uuid id PK
+        varchar url_hash UK "canonicalised URL, hashed"
+        varchar url
+        varchar domain
+        varchar title
+        date published_at
+        text content_text "what quotes are verified against"
+        varchar content_hash
+        varchar fetch_method "DIRECT | READER | AGENT_TOOL | ..."
+        timestamptz fetched_at
+        timestamptz expires_at "reused for a week, then re-read"
+    }
+
+    RESEARCH_SOURCE {
+        uuid id PK
+        uuid research_run_id FK
+        uuid research_query_id FK "nullable"
+        uuid web_document_id FK "nullable - null when it could not be read"
+        varchar connector_id "bing-web | openalex | groq-agent | ..."
+        varchar url
+        varchar domain
+        varchar title
+        varchar source_type "LAW | STANDARD | RESEARCH | NEWS | ..."
+        double relevance_score
+        int credibility_score "0-100, computed"
+        text credibility_breakdown "the arithmetic, as JSON"
+        varchar fetch_status "FETCHED | READER_FALLBACK | BLOCKED | ..."
+        int claim_count
+    }
+
+    EVIDENCE_CLAIM {
+        uuid id PK
+        uuid research_run_id FK
+        uuid research_source_id FK
+        text claim_text "one assertion, in our words"
+        text quote "the source's own words"
+        boolean quote_verified "located in web_document.content_text"
+        double quote_match_ratio
+        int quote_start "offset, so the UI can highlight it in place"
+        varchar claim_type "STATISTIC | REGULATION | RISK | ..."
+        double numeric_value "parsed out when the claim carries a figure"
+        varchar numeric_unit
+        date as_of_date
+        double confidence
+        int corroboration_count "independent domains only"
+        int contradiction_count
+        int citation_index "the number shown as [3]"
+    }
+
+    CLAIM_RELATION {
+        uuid id PK
+        uuid claim_a_id FK
+        uuid claim_b_id FK
+        varchar relation_type "CORROBORATES | CONTRADICTS"
+        double similarity
+        boolean same_domain "false is the only kind that counts"
+        text note
+    }
+
+    OPPORTUNITY_SCORE {
+        uuid ai_opportunity_id PK "shares the opportunity's key"
+        smallint feasibility "0-5"
+        smallint evidence_strength "0-5, judges the citations"
+        smallint business_impact "0-5"
+        smallint risk_level "0-5, higher is worse"
+        smallint implementation_effort "0-5, higher is more work"
+        double confidence
+        varchar verdict "STRONG | SOUND | QUALIFIED | WEAK | REJECTED"
+        text critique "the reviewer's objection, verbatim"
+        varchar reviewer_model "a different family from the generator"
+    }
+
+    IMPACT_ESTIMATE {
+        uuid id PK
+        uuid process_id FK
+        uuid ai_opportunity_id FK "nullable"
+        uuid activity_id FK "nullable"
+        varchar label
+        double volume_per_month "model input"
+        double minutes_per_item "model input"
+        double automation_share "model input, 0-1"
+        double hourly_cost_inr "model input"
+        double hours_saved_per_month "computed here"
+        double cost_saved_per_month_inr "computed here, net of running cost"
+        double payback_months "computed here"
+        varchar basis "MODEL_ESTIMATE | USER_SUPPLIED | BENCHMARK"
+        text assumptions "one per line, so the figures can be argued with"
+    }
+
+    RISK_ITEM {
+        uuid id PK
+        uuid process_id FK
+        uuid ai_opportunity_id FK "nullable"
+        varchar title
+        text description
+        varchar category "PRIVACY | BIAS | ACCURACY | COMPLIANCE | ..."
+        smallint likelihood "1-5"
+        smallint impact "1-5"
+        int severity_score "likelihood x impact"
+        text mitigation "an auditable control"
+        varchar owner_role
+        varchar obligation "only where the research established one"
+    }
+
+    ROADMAP_ITEM {
+        uuid id PK
+        uuid process_id FK
+        uuid ai_opportunity_id FK "nullable - null means enabling work"
+        smallint wave "1 = startable now"
+        varchar title
+        text description
+        varchar effort "LOW | MEDIUM | HIGH"
+        varchar impact "LOW | MEDIUM | HIGH"
+        int duration_weeks
+        varchar depends_on
+        varchar success_metric
+    }
+
+    AI_CACHE {
+        varchar cache_key PK "sha256 of provider, model, settings and prompt"
+        varchar task
+        varchar provider
+        varchar model
+        text response_text
+        int prompt_tokens
+        int output_tokens
+        int hit_count
+        timestamptz created_at
     }

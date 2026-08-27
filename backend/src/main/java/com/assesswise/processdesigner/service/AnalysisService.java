@@ -103,8 +103,21 @@ public class AnalysisService {
         log.info("Analysis pipeline: {}", useStagedPipeline ? StagedAnalysisPipeline.PIPELINE_VERSION : SINGLE_CALL_PIPELINE);
     }
 
-    /** What the caller needs to report the outcome; the full detail is re-read afterwards. */
-    public record AnalysisOutcome(UUID runId, AnalysisPersistenceService.PersistResult persisted) {}
+    /**
+     * What the caller needs to report the outcome; the full detail is re-read afterwards.
+     *
+     * @param warnings everything worth telling the user, from the pipeline and from persistence
+     *     together. Kept on the outcome rather than only on the run record because a stage that
+     *     failed is the first thing someone reading the result needs to know, and reading it back
+     *     out of the audit trail to display it would be a strange way to find that out.
+     */
+    public record AnalysisOutcome(
+            UUID runId, AnalysisPersistenceService.PersistResult persisted, List<String> warnings) {
+
+        public AnalysisOutcome {
+            warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        }
+    }
 
     public AnalysisOutcome analyze(UUID processId) {
         return analyze(processId, ProgressSink.NONE);
@@ -181,7 +194,7 @@ public class AnalysisService {
                             "score", outcome.scorecard() == null ? 0 : outcome.scorecard().overall()));
 
             log.info("Staged analysis run {} succeeded: {}", runId, summaryOf(persisted, outcome));
-            return new AnalysisOutcome(runId, persisted);
+            return new AnalysisOutcome(runId, persisted, warnings);
 
         } catch (AnalysisFailedException e) {
             runRecorder.recordFailure(runId, e.getMessage() + " " + e.getDetail(), null, false, startedAt);
@@ -374,7 +387,7 @@ public class AnalysisService {
                             + "{} interventions, {} warning(s)",
                     runId, persisted.problems(), persisted.opportunities(), persisted.futureActivities(),
                     persisted.interventions(), warnings.size());
-            return new AnalysisOutcome(runId, persisted);
+            return new AnalysisOutcome(runId, persisted, warnings);
 
         } catch (AnalysisFailedException e) {
             throw e;

@@ -3,43 +3,71 @@ sequenceDiagram
     participant U as Browser
     participant C as AnalysisController
     participant S as AnalysisService
+    participant PL as StagedAnalysisPipeline
     participant DB as PostgreSQL
-    participant R as KnowledgeRetrievalService
-    participant P as PromptBuilder
-    participant G as Provider chain<br/>(Gemini → Groq)
-    participant V as Parser + Validator
+    participant RO as ResearchOrchestrator
+    participant WEB as Public search APIs<br/>and the pages themselves
+    participant QV as QuoteVerifier
+    participant GW as AiGateway<br/>(router · cache · budget)
     participant W as AnalysisPersistenceService
 
-    U->>C: POST /api/processes/{id}/analyze
-    C->>S: analyze(processId)
+    U->>C: POST /api/processes/{id}/analyze/stream
+    C->>S: analyze(processId, sseSink)
     S->>S: rate-limit check · reject if already running
     S->>DB: load process, activities, roles, systems, recorded problems
-    S->>R: retrieve(process, activities)
-    R->>DB: SELECT * FROM knowledge_snippet
-    R-->>S: top 4 snippets + score + matched terms
-    S->>P: render prompts/analyze-process.txt
-    P-->>S: prompt text
-    S->>DB: INSERT analysis_run (RUNNING) + retrieved snippets
-    S->>G: complete(prompt)
-    G->>G: transport retry on 429/5xx
-    alt primary provider unusable (quota, outage, bad key)
-        G->>G: fall through to the next provider in the chain
+    S->>DB: INSERT analysis_run (RUNNING)
+
+    Note over PL: Stage 1 — intake, no model
+    PL->>DB: INSERT analysis_stage (RUNNING)
+    PL-->>U: SSE: activities, roles, systems, and the gaps in them
+
+    Note over PL,GW: Stage 2 — diagnosis
+    PL->>GW: complete(DIAGNOSIS, prompt)
+    GW->>GW: route → check cache → reserve token budget (wait if needed)
+    GW-->>PL: problems with root causes
+    PL->>DB: INSERT analysis_stage (prompt, response, model, tokens)
+
+    Note over PL,WEB: Stage 3 — live research
+    PL->>RO: run(process, activities, problems)
+    RO->>GW: plan searches (falls back to templates if unavailable)
+    RO->>WEB: eleven connectors, in parallel, per query
+    WEB-->>RO: results
+    RO->>DB: INSERT research_run, research_query, research_source
+    RO->>WEB: fetch the best pages (robots.txt honoured)
+    alt publisher refuses a direct request
+        RO->>WEB: retry through a text reader
+    else still unreadable
+        RO->>RO: keep the source with its search snippet, marked not read
     end
-    G-->>S: raw text + token counts + which provider answered
-    S->>V: parse + validate
-    alt response unusable
-        V-->>S: errors
-        S->>P: render prompts/repair-json.txt with the errors
-        S->>G: complete(repair prompt) — one retry only
-        G-->>S: raw text
-        S->>V: parse + validate
+    RO->>DB: INSERT web_document (cached across runs)
+    RO->>GW: extract claims with verbatim quotes
+    RO->>QV: locate each quote in the stored page text
+    QV-->>RO: verified / unverified + match ratio + offset
+    RO->>RO: score credibility, cross-check claims across domains
+    RO->>DB: INSERT evidence_claim, claim_relation
+    RO-->>U: SSE: each query, each source, each quote checked
+
+    Note over PL,GW: Stages 4-9 — one model call each
+    loop opportunities · critique · future design · quantification · risks · roadmap
+        PL->>GW: complete(task, prompt with numbered evidence)
+        alt no budget on any candidate model
+            GW-->>PL: refusal with the reason
+            PL->>PL: required stage stops the run<br/>otherwise record DEGRADED and carry on
+        else answered
+            GW-->>PL: response
+            PL->>PL: parse, validate, one repair retry if unusable
+        end
+        PL->>DB: INSERT analysis_stage
+        PL-->>U: SSE: stage summary, model used, tokens, warnings
     end
-    alt still unusable
-        S->>DB: UPDATE analysis_run (FAILED)
-        S-->>U: 422 with the specific reason
-    else usable
-        S->>W: replaceAnalysis(...)
-        W->>DB: DELETE previous AI rows, INSERT new rows with resolved FKs
-        S->>DB: UPDATE analysis_run (SUCCEEDED) + warnings
-        S-->>U: 200 with the full structured result
-    end
+
+    Note over PL: Stage 10 — scorecard, no model
+    PL->>PL: coverage · grounding · corroboration · agreement · specificity · traceability
+
+    S->>W: replaceAnalysis(analysis, citations, scorecard)
+    W->>W: resolve citations to stored claims<br/>drop any number the model was never shown
+    W->>W: compute grounding from quote-verified claims only
+    W->>W: compute hours and rupees from the model's four inputs
+    W->>DB: DELETE previous AI rows, INSERT new rows with resolved FKs
+    S->>DB: UPDATE analysis_run (SUCCEEDED, totals, warnings)
+    S-->>U: SSE 'result': the full structured analysis

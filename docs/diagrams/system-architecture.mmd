@@ -3,75 +3,100 @@ flowchart TB
         direction LR
         DASH["/ — Process list"]
         NEW["/processes/new — Create a process"]
-        DETAIL["/processes/[id] — Comparison strip<br/>Current · Transition · Future · Evidence"]
-        EVID["/evidence — Curated corpus"]
+        DETAIL["/processes/[id] — Ten tabs<br/>Overview · Today · Diagnosis · Recommendations<br/>Future · Impact · Risks · Roadmap · Evidence · Trace"]
+        CONSOLE["Live analysis console<br/><i>streams every stage as it runs</i>"]
+        SYS["/system — Engine<br/>routing · budgets · connectors"]
     end
 
     subgraph API["API — Spring Boot 3.5 · Java 21"]
         direction LR
         PC["ProcessController<br/>CRUD + comparison"]
-        AC["AnalysisController<br/>analyze + run trace"]
+        AC["AnalysisController<br/>analyze · analyze/stream (SSE)<br/>research · run trace · stages"]
+        SC["SystemController<br/>model routing · live budgets"]
         EC["EvidenceController"]
-        LC["LookupController"]
         AC2["AuthController<br/>register · login · me"]
         SEC["SecurityFilterChain<br/>stateless JWT · BCrypt"]
         ACC["ProcessAccessService<br/><i>the one place ownership is decided</i>"]
         GEH["GlobalExceptionHandler<br/>RFC 7807 problem details"]
     end
 
-    subgraph AI["AI INTELLIGENCE LAYER"]
+    subgraph PIPE["ANALYSIS PIPELINE — ten stages, one model call each"]
         direction TB
-        AS["AnalysisService<br/><i>orchestrates the pipeline</i>"]
-        KRS["KnowledgeRetrievalService<br/>TF-IDF-weighted keyword match"]
-        PB["PromptBuilder + PromptTemplateRenderer<br/>templates in resources/prompts/"]
+        P1["1 Intake<br/><i>no model: counts and gaps</i>"]
+        P2["2 Diagnosis<br/>problems + root causes"]
+        P3["3 Research<br/><i>live, see below</i>"]
+        P4["4 Opportunities<br/>must cite evidence by number"]
+        P5["5 Critique<br/><i>a different model family</i>"]
+        P6["6 Future design<br/>human/AI split + failure modes"]
+        P7["7 Quantification<br/><i>model gives inputs, we do the maths</i>"]
+        P8["8 Risks + obligations"]
+        P9["9 Roadmap<br/>waves and dependencies"]
+        P10["10 Scorecard<br/><i>no model: ratios over stored rows</i>"]
+        P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10
+    end
+
+    subgraph RESEARCH["RESEARCH LAYER — eleven connectors, none needing a key"]
+        direction TB
+        QP["ResearchQueryPlanner<br/>model-planned, template fallback"]
+        CONN["Connectors<br/>Bing web · Bing News · Google News · Wikipedia<br/>OpenAlex · Crossref · arXiv · Europe PMC<br/>Hacker News · Stack Exchange · Groq agentic"]
+        FETCH["PageFetcher<br/>direct → reader → snippet<br/><i>robots.txt honoured</i>"]
+        EXTRACT["ContentExtractor + ClaimExtractor<br/>article text → claims with quotes"]
+        VERIFY["QuoteVerifier<br/><b>locates every quote in the stored text</b>"]
+        SCORE["CredibilityScorer + CorroborationAnalyzer<br/>explainable score · independent domains only"]
+        QP --> CONN --> FETCH --> EXTRACT --> VERIFY --> SCORE
+    end
+
+    subgraph MODEL["MODEL LAYER — one seam to every provider"]
+        direction TB
+        GW["AiGateway<br/><i>route → cache → budget → call</i>"]
+        MR["ModelRouter<br/>per-task candidates"]
+        TB["TokenBudgetGovernor<br/>per-model + org-wide buckets<br/><i>synced from rate-limit headers</i>"]
+        CACHE["AiResponseCache<br/><i>in Postgres, survives restart</i>"]
         AP["AiProvider <i>(interface)</i>"]
-        FB["FallbackAiProvider<br/><i>tries each in order</i>"]
-        GP["GeminiProvider<br/><i>primary</i>"]
-        GQ["GroqProvider<br/><i>fallback</i>"]
-        PARSE["AnalysisResponseParser<br/>fence stripping · brace matching"]
-        VAL["AnalysisPayloadValidator<br/>enum coercion · caps · drops"]
-        PERS["AnalysisPersistenceService<br/>FK resolution · idempotent replace"]
+        GW --> MR & TB & CACHE --> AP
     end
 
     subgraph DATA["DATA & KNOWLEDGE LAYER — PostgreSQL (Neon free tier)"]
         direction LR
         CUR[("CURRENT<br/>process · activity · problem<br/>role · system_tool")]
-        TRANS[("TRANSITION<br/>ai_opportunity<br/>ai_opportunity_evidence")]
-        FUT[("FUTURE<br/>future_activity<br/>ai_intervention")]
-        KNOW[("KNOWLEDGE<br/>knowledge_snippet")]
-        AUDIT[("AUDIT<br/>analysis_run<br/>analysis_run_snippet")]
+        TRANS[("TRANSITION<br/>ai_opportunity · opportunity_score<br/>ai_opportunity_claim")]
+        FUT[("FUTURE<br/>future_activity · ai_intervention<br/>impact_estimate · risk_item · roadmap_item")]
+        EVID[("EVIDENCE<br/>research_run · research_source<br/>evidence_claim · claim_relation<br/>web_document · knowledge_snippet")]
+        AUDIT[("AUDIT<br/>analysis_run · analysis_stage<br/>analysis_scorecard · ai_cache")]
     end
 
     UI -->|"REST / JSON + Bearer token"| SEC
+    AC -.->|"Server-Sent Events"| CONSOLE
     SEC --> API
-    AC2 --> DATA
     PC --> ACC
     AC --> ACC
     PC --> DATA
-    EC --> KNOW
-    LC --> DATA
-    AC --> AS
+    EC --> EVID
+    SC --> MODEL
+    AC --> PIPE
 
-    AS --> KRS --> KNOW
-    AS --> PB
-    AS --> AP
-    AP -.->|"the only seam to a model"| FB
-    FB --> GP
-    FB -.->|"only if Gemini fails"| GQ
-    GP -->|"HTTPS"| GEMINI(["Google AI Studio<br/>gemini-3.1-flash-lite · free tier"])
-    GQ -->|"HTTPS"| GROQ(["Groq Cloud<br/>llama-3.3-70b · free tier"])
-    AS --> PARSE --> VAL --> PERS
-    PERS --> CUR & TRANS & FUT
-    AS --> AUDIT
+    P3 --> RESEARCH
+    RESEARCH --> EVID
+    PIPE --> MODEL
+    RESEARCH --> MODEL
+    CONN -->|"HTTPS, keyless"| WEB(["Public search APIs<br/>and the pages they point at"])
+    AP --> GROQ(["Groq Cloud — primary<br/>gpt-oss-120b · gpt-oss-20b · qwen3 · compound"])
+    AP -.->|"when Groq refuses, and for<br/>the stages routed to it"| GEMINI(["Google AI Studio<br/>gemini-3.1-flash-lite"])
+    PIPE --> DATA
+    P10 --> AUDIT
 
     classDef ui fill:#eef2ff,stroke:#6366f1,color:#1e1b4b
     classDef api fill:#ecfeff,stroke:#0891b2,color:#083344
-    classDef ai fill:#f0fdf4,stroke:#16a34a,color:#052e16
+    classDef pipe fill:#f0fdf4,stroke:#16a34a,color:#052e16
+    classDef research fill:#fff7ed,stroke:#ea580c,color:#431407
+    classDef model fill:#faf5ff,stroke:#9333ea,color:#3b0764
     classDef data fill:#fefce8,stroke:#ca8a04,color:#422006
     classDef ext fill:#fdf2f8,stroke:#db2777,color:#500724
 
-    class DASH,NEW,DETAIL,EVID ui
-    class PC,AC,AC2,SEC,ACC,EC,LC,GEH api
-    class AS,KRS,PB,AP,FB,GP,GQ,PARSE,VAL,PERS ai
-    class CUR,TRANS,FUT,KNOW,AUDIT data
-    class GEMINI,GROQ ext
+    class DASH,NEW,DETAIL,CONSOLE,SYS ui
+    class PC,AC,SC,AC2,SEC,ACC,EC,GEH api
+    class P1,P2,P3,P4,P5,P6,P7,P8,P9,P10 pipe
+    class QP,CONN,FETCH,EXTRACT,VERIFY,SCORE research
+    class GW,MR,TB,CACHE,AP model
+    class CUR,TRANS,FUT,EVID,AUDIT data
+    class GEMINI,GROQ,WEB ext

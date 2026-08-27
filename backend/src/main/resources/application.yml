@@ -96,10 +96,64 @@ app:
       thinking-budget: ${GEMINI_THINKING_BUDGET:0}
     groq:
       api-key: ${GROQ_API_KEY:}
-      model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+      # Verified against Groq's live free tier. Model ids move: the previous default,
+      # llama-3.3-70b-versatile, has been decommissioned. Per-task routing overrides this
+      # for most stages; it is the fallback when a route names a model that is gone.
+      model: ${GROQ_MODEL:openai/gpt-oss-120b}
       temperature: ${GROQ_TEMPERATURE:0.2}
       max-output-tokens: ${GROQ_MAX_OUTPUT_TOKENS:4096}
       structured-output: ${GROQ_STRUCTURED_OUTPUT:true}
+      # The agentic model used as a research connector: it runs its own web searches and
+      # returns the pages it read, which are stored and quote-verified like any other source.
+      research-model: ${GROQ_RESEARCH_MODEL:groq/compound}
+    # Per-task model routing. Empty here means the defaults in ModelRouter apply; set one
+    # to a comma-separated list of provider:model to override, e.g.
+    #   AI_ROUTE_DIAGNOSIS=gemini:,groq:openai/gpt-oss-120b
+    routing:
+      diagnosis: ${AI_ROUTE_DIAGNOSIS:}
+      opportunities: ${AI_ROUTE_OPPORTUNITIES:}
+      critique: ${AI_ROUTE_CRITIQUE:}
+      future-design: ${AI_ROUTE_FUTURE_DESIGN:}
+      claim-extraction: ${AI_ROUTE_CLAIM_EXTRACTION:}
+      research-agent: ${AI_ROUTE_RESEARCH_AGENT:}
+      quantification: ${AI_ROUTE_QUANTIFICATION:}
+      risk: ${AI_ROUTE_RISK:}
+      roadmap: ${AI_ROUTE_ROADMAP:}
+      query-planning: ${AI_ROUTE_QUERY_PLANNING:}
+    # Remembered model responses. A restart no longer throws away quota already spent, and
+    # re-running an unchanged analysis costs nothing.
+    cache-enabled: ${AI_CACHE_ENABLED:true}
+    cache-ttl-hours: ${AI_CACHE_TTL_HOURS:72}
+    # How long a stage waits for free-tier token budget before trying another model.
+    max-rate-limit-wait-seconds: ${AI_MAX_RATE_LIMIT_WAIT_SECONDS:60}
+
+  # ---------------------------------------------------------------------------
+  # LIVE RESEARCH
+  #
+  # Eleven connectors, all free, none requiring an API key. Tavily and Brave are
+  # supported and stay dormant unless a key is supplied, so there is no paid
+  # dependency anywhere in the default configuration.
+  # ---------------------------------------------------------------------------
+  research:
+    enabled: ${RESEARCH_ENABLED:true}
+    max-queries: ${RESEARCH_MAX_QUERIES:5}
+    hits-per-query: ${RESEARCH_HITS_PER_QUERY:5}
+    # The main lever on how long a fresh analysis takes: each document read costs a model
+    # call against an organisation-wide tokens-per-minute ceiling.
+    max-documents: ${RESEARCH_MAX_DOCUMENTS:6}
+    max-claims: ${RESEARCH_MAX_CLAIMS:24}
+    fetch-timeout-seconds: ${RESEARCH_FETCH_TIMEOUT_SECONDS:12}
+    fetch-concurrency: ${RESEARCH_FETCH_CONCURRENCY:6}
+    document-cache-ttl-hours: ${RESEARCH_DOCUMENT_CACHE_TTL_HOURS:168}
+    respect-robots-txt: ${RESEARCH_RESPECT_ROBOTS:true}
+    user-agent: ${RESEARCH_USER_AGENT:AssessWiseResearchBot/2.0 (+https://github.com/assesswise/future-designer)}
+    # Publishers that refuse server-side requests are retried through a public reader.
+    reader-fallback-enabled: ${RESEARCH_READER_FALLBACK:true}
+    # Optional keyed search providers. Dormant unless a key is present.
+    tavily:
+      api-key: ${RESEARCH_TAVILY_API_KEY:}
+    brave:
+      api-key: ${RESEARCH_BRAVE_API_KEY:}
 
   auth:
     # Signing key for session tokens. MUST be replaced in production — at least 32 characters.

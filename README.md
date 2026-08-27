@@ -1,23 +1,33 @@
 # AI Future Process Designer
 
 Takes a business process as it runs **today** and designs an AI-enabled **future** version of it —
-storing the result as structured, queryable rows rather than a paragraph of advice.
+researched live against public sources, with every recommendation citing a quote that was checked
+against the page it came from, and the result stored as structured, queryable rows rather than a
+paragraph of advice.
 
 Built for the Modus ETI Enterprise AI Build Challenge, Assignment 3. The demo domain is
 **AssessWise**, a fictional online-assessment company, but the pipeline knows nothing about that
 domain: you can create a process from any industry and get a real analysis with no code changes.
 
 ```
-Current activities  →  Problems  →  AI opportunities  →  Future activities  →  Human vs AI  →  Benefit
-    (rows)             (rows)         (rows + evidence)      (rows)            (columns)     (queryable)
+Current activities → Problems → Live research → AI opportunities → Adversarial review →
+     (rows)          (rows)     (sources +      (rows + verified    (verdict + critique
+                                 quoted claims)    citations)          per recommendation)
+
+  → Future activities → Human vs AI → Quantified impact → Risks → Roadmap → Measured score
+       (rows)            (columns)      (rows, INR)      (rows)   (waves)    (six components)
 ```
+
+Ten stages, each its own model call with its own prompt and its own stored audit row. Every prompt
+and every response is readable in the running application.
 
 | | |
 |---|---|
 | **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind 4 — deployed on Vercel |
 | **Backend** | Spring Boot 3.5 · Java 21 — deployed on Render |
 | **Database** | PostgreSQL 16 — Neon serverless |
-| **AI** | Google Gemini (primary) with automatic failover to Groq — both free tier |
+| **AI** | Groq (primary — GPT-OSS 120B/20B, Qwen3, and `groq/compound` for agentic search) with automatic failover to Google Gemini — both free tier |
+| **Research** | Eleven live connectors: Bing web and news, Google News, Wikipedia, OpenAlex, Crossref, arXiv, Europe PMC, Hacker News, Stack Exchange, agentic search — **none requiring an API key** |
 | **Accounts** | Email + password, BCrypt, stateless JWT — your processes are private to you |
 | **Cost to run** | Nothing. Every service is free-tier or open source — see [LIBRARIES.md](LIBRARIES.md) |
 
@@ -54,28 +64,51 @@ on every push.
 
 ## What makes this more than a prompt wrapper
 
+**It researches the actual domain, live.** Every analysis plans its own searches in the domain's
+vocabulary, runs them across eleven free public sources, fetches the best results and reads them.
+A process from an industry nothing here anticipates gets real sources about that industry — not a
+fixed corpus retrieved by keyword.
+
+**Quotes are checked mechanically, not asserted.** Each claim arrives with the words from the
+source that support it, and that quote is then located in the stored page text by string matching.
+Not found means the claim is kept and marked **unverified**, and can no longer raise anything's
+grounding score. No model is asked whether it was telling the truth — a model that will invent a
+quote will also confirm one.
+
+**A second model marks the first one's homework.** The review runs on a different model family from
+the generation, deliberately: a model checking its own work agrees with itself. Where the two
+disagree you see the objection, scored on feasibility, evidence strength, impact, risk and effort.
+
+**The analysis scores itself, and is allowed to score badly.** Six components — coverage, grounding,
+corroboration, reviewer agreement, specificity, traceability — each a ratio over stored rows rather
+than a model's opinion. A run whose sources were all blocked *should* score badly, and does.
+
 **The future process is data.** `future_activity` rows carry an ordered sequence, a human
 responsibility, an AI responsibility and a responsibility type; `ai_intervention` rows join each of
 them back to the `ai_opportunity` that justified it, which in turn joins to the `activity` it
 targets and the `knowledge_snippet` rows that support it. The whole chain is one SQL query — see
 [docs/data-model.md](docs/data-model.md).
 
-**The reasoning is a pipeline, not one giant prompt.** Retrieval, prompt assembly, the model call,
-response parsing, semantic validation, a repair retry and foreign-key resolution are separate,
-separately tested components. The model contributes one step of eight.
+**The reasoning is a pipeline, not one giant prompt.** Ten stages, each with its own model, prompt
+and stored row: read the process, diagnose it, research the domain, propose grounded interventions,
+review them adversarially, design the future state, quantify it, assess risk, sequence delivery,
+score the result. Two are load-bearing; the rest degrade rather than failing the run, which is what
+makes it survivable on a free tier where a stage can lose its model mid-analysis.
 
 **Nothing is hard-coded per process.** There is no branch anywhere on a process name. The six sample
 processes ship with `status = CURRENT_ONLY` and no future state at all — the demo generates theirs
 live, using the same code path as a process created thirty seconds earlier.
 
-**Outputs are traceable.** Every run writes an `analysis_run` row holding the exact prompt sent, the
-exact text the model returned, which snippets were retrieved and why, token counts, and whether the
-repair retry fired. The UI exposes it behind a "Show prompt & raw response" button — the claim that
-outputs are generated is a link, not an assertion.
+**Outputs are traceable.** Every stage writes an `analysis_stage` row holding the exact prompt sent,
+the exact text the model returned, which model answered, what it cost in tokens, how long it waited
+for rate-limit budget and whether it was served from cache. The interface shows all of it on a Run
+trace tab — the claim that outputs are generated is a link, not an assertion.
 
-**Citations can't be fabricated.** The model is only shown four snippets and is told to cite them by
-exact title. Any title that doesn't resolve to a snippet actually retrieved for that run is
-discarded, and the omission is recorded as a warning on the run.
+**Citations cannot be fabricated.** The model cites evidence by the numbers it was shown. Any number
+it was not shown is dropped and recorded as a fabricated citation; any citation whose quote failed
+verification is stored and displayed differently from one that passed. A recommendation citing
+nothing is kept and labelled ungrounded rather than quietly deleted — an idea with no supporting
+literature can still be a good idea, and hiding that it has none would be the dishonest choice.
 
 **Your work is your own.** Sign in with an email and password. Processes you create are private
 to your account — another signed-in user cannot list, search, read, analyse, edit or delete them,
@@ -83,9 +116,14 @@ and asking for one by id returns *404, not 403*, so the API cannot be used to pr
 people's ids. The six sample processes are the deliberate exception: shared with everyone,
 analysable by anyone, and editable by nobody, so one person cannot delete the demo data.
 
-**It survives a provider outage.** Free AI tiers run out — Gemini's allows only a few dozen
-requests a day. When it refuses, the request falls through to Groq automatically, and the result
-page states plainly which service answered and why the first was passed over.
+**It survives a provider outage, and it is honest about the free tier.** Groq's free allowance is
+roughly 8,000 tokens a minute, enforced across the whole organisation rather than per model — which
+was measured, not read: a call to one model was refused with a different model's name in the error.
+A token governor synchronises itself from each provider's rate-limit headers and makes stages wait
+rather than fail; responses are cached in Postgres so a restart does not discard quota already
+spent; and the high-volume work alternates providers, because a second provider is a second quota.
+When a model refuses anyway, the run says which one answered instead and why. The **Engine** page
+shows the remaining budget live.
 
 ---
 
@@ -97,9 +135,11 @@ page states plainly which service answered and why the first was passed over.
 - **Node 20+** (`node -v`)
 - **PostgreSQL 13+** — Docker Compose file included, or point at any instance you have
 - **At least one free AI API key** (needed only for `Analyze`; everything else works without one):
-  - Gemini — <https://aistudio.google.com/apikey> (primary)
-  - Groq — <https://console.groq.com/keys> (fallback; optional but recommended, since Gemini's free
-    daily allowance is small)
+  - Groq — <https://console.groq.com/keys> (primary; a thousand requests a day per model)
+  - Gemini — <https://aistudio.google.com/apikey> (fallback, and a second quota the high-volume
+    stages alternate into — worth setting even though the application runs on Groq alone)
+
+  No key of any kind is needed for the research layer: all eleven connectors are keyless.
 
 Maven is not required — the repo ships the Maven wrapper.
 
@@ -154,34 +194,57 @@ Open <http://localhost:3000> and sign in with **demo@assesswise.test** / **demo1
 your own account. The demo account is created on first start and can be switched off with
 `AUTH_DEMO_ACCOUNT_ENABLED=false`.
 
-### Without a Gemini API key
+### Without an AI API key
 
 Everything except `POST /analyze` works: browse the sample processes, create your own, read the
-evidence corpus. Pressing **Analyse** returns a clear `503` explaining that the key is missing,
+evidence corpus. Pressing **Analyse** returns a clear `503` naming the environment variable to set,
 rather than failing obscurely.
 
 ---
 
 ## Try the thing it was built for
 
-1. Open <http://localhost:3000> and click **+ New process**.
-2. Click **Fill an example**, or better — describe a process from an industry that has nothing to do
-   with online assessment. Bank account opening, vaccine cold chain, restaurant inventory,
+1. Open <http://localhost:3000> and click **New process**.
+2. Click **Start from an example**, or better — describe a process from an industry that has nothing
+   to do with online assessment. Bank account opening, vaccine cold chain, restaurant inventory,
    warehouse picking. Four or five steps is plenty.
-3. Press **Create and analyse**.
-4. Ten to forty seconds later you have AI opportunities with reasoning and risks, a redesigned
-   process with an explicit human/AI split per step, and interventions tying the two together.
-5. Press **Show prompt & raw response** to see exactly what was sent and returned.
-6. Confirm it is really rows:
+3. Press **Create and analyse**, and watch it run. The console shows each search being planned,
+   each connector answering, each page being fetched and each quote being checked.
+4. **A first analysis of a new process takes three to six minutes**, and most of that is waiting on
+   the free tier's tokens-per-minute ceiling rather than on the models thinking. That is why the run
+   streams its progress instead of showing a spinner. Re-running an unchanged process is close to
+   instant, because every model response is cached.
+5. What comes back: a diagnosis with root causes, recommendations that cite quote-verified evidence,
+   a reviewing model's objections to each one, a redesigned process with an explicit human/AI split
+   and a stated failure mode per step, the impact in rupees with its assumptions, a risk register,
+   a delivery roadmap, and a measured score for the analysis itself.
+6. Open **Evidence** to read every claim beside the quote that was checked against its source, and
+   **Run trace** to see the exact prompt and response for all ten stages.
+7. Confirm it is really rows:
 
 ```bash
 psql "$DATABASE_URL" -c "
   SELECT fa.sequence_order, fa.name, fa.responsibility_type,
-         fa.human_responsibility, fa.ai_responsibility
+         fa.human_responsibility, fa.ai_responsibility, fa.failure_mode
   FROM future_activity fa
   JOIN process p ON p.id = fa.process_id
   WHERE p.name = 'Your Process Name'
   ORDER BY fa.sequence_order;"
+```
+
+And that the citations are real — every recommendation, with the quote behind it and whether that
+quote was found in the page it came from:
+
+```bash
+psql "$DATABASE_URL" -c "
+  SELECT left(o.description, 60) AS recommendation,
+         c.quote_verified, s.domain, left(c.quote, 80) AS quote
+  FROM ai_opportunity o
+  JOIN ai_opportunity_claim link ON link.ai_opportunity_id = o.id
+  JOIN evidence_claim c ON c.id = link.evidence_claim_id
+  JOIN research_source s ON s.id = c.research_source_id
+  JOIN process p ON p.id = o.process_id
+  WHERE p.name = 'Your Process Name';"
 ```
 
 Re-run **Analyse** as often as you like: the previous future state is cleared and regenerated in one
@@ -192,7 +255,7 @@ transaction, so no duplicate or orphaned rows accumulate.
 ## Tests
 
 ```bash
-cd backend && ./mvnw verify        # 129 tests
+cd backend && ./mvnw verify        # 165 tests
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 
@@ -208,6 +271,10 @@ What is covered:
 | The surprise-record path | A waste-management process, analysed end to end through the real HTTP layer, asserting the resulting rows and their foreign keys |
 | Idempotent re-analysis | Running twice leaves exactly one set of rows and zero orphaned interventions |
 | The repair retry | A prose response triggers exactly one repair prompt containing the specific complaint, and the second attempt succeeds |
+| Quote verification | A quote copied from a page verifies; one that differs only in typography verifies; a fabricated sentence in the same register **does not**, and neither does the same vocabulary rearranged |
+| The staged pipeline | All ten stages end to end: each stage's output in its own rows, reviews attached to the right recommendations, impact arithmetic computed here rather than by the model, and a non-essential stage failing without losing the run |
+| Free-tier budgeting | A second model does not get a second per-minute allowance, a second provider does, a refused reservation is handed back, and a rate-limited model is taken out of rotation |
+| Corroboration | Two publishers agreeing counts; one publisher repeating itself does not; two figures far apart are recorded as a disagreement rather than averaged |
 | Honest failure | Two unusable responses produce a `422`, leave the process untouched, and record a `FAILED` run with the reason |
 | Citation integrity | A fabricated snippet title is discarded, leaves no `ai_opportunity_evidence` row, and is reported as a warning |
 | Both AI providers | Each runs against a real local HTTP server: request shape, response unpacking, 429 retry, non-retryable auth failure, safety block, truncation |
@@ -218,7 +285,18 @@ What is covered:
 | Parsing and validation | Markdown fences, prose wrappers, braces and escaped quotes inside strings, enum synonyms, oversized payloads, duplicate items |
 
 The model call itself is scripted in tests, by a stub that lives in `src/test/java` only and is
-never packaged.
+never packaged. **One test deliberately talks to the real internet** and is skipped unless asked
+for, because the research layer's dependencies are eleven third parties with no contract to this
+project — a mocked connector test only proves the mock still matches what the connector was written
+against, which is precisely the thing that goes stale:
+
+```bash
+RESEARCH_LIVE_TESTS=true GROQ_API_KEY=... ./mvnw test -Dtest=LiveResearchSmokeTest
+```
+
+It asserts what would actually break: that some connectors still answer, that a page can still be
+fetched and read, and that a quote taken from real page text still verifies against it while an
+invented one does not. Worth running before a demo.
 
 ---
 
@@ -251,33 +329,50 @@ Every knob is an environment variable; nothing needs a code change. Full list wi
 | `AUTH_JWT_SECRET` | *(dev placeholder)* | **Set this in production.** Signs session tokens; min 32 chars. `openssl rand -base64 48` |
 | `AUTH_TOKEN_TTL_HOURS` | `12` | How long a sign-in lasts |
 | `AUTH_DEMO_ACCOUNT_ENABLED` | `true` | Creates demo@assesswise.test on first start. **Turn off in production** |
-| `AI_PROVIDER` | `gemini` | The provider tried first |
-| `AI_FALLBACK_PROVIDERS` | `groq` | Tried in order when the primary fails. Empty disables failover |
-| `GEMINI_API_KEY` | *(empty)* | Primary provider. With no key at all, `/analyze` returns a clear 503 |
-| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Any model your key can reach — see the warning below |
-| `GEMINI_STRUCTURED_OUTPUT` | `true` | Server-side response schema. Validation and repair still run either way |
+| `ANALYSIS_PIPELINE` | `staged` | `staged` = ten stages with live research; `single` = the original one-prompt analysis, which costs one request instead of eight |
+| `AI_PROVIDER` | `groq` | The provider tried first |
+| `AI_FALLBACK_PROVIDERS` | `gemini` | Tried in order when the primary fails. Empty disables failover |
+| `GROQ_API_KEY` | *(empty)* | Primary provider. With no key at all, `/analyze` returns a clear 503 naming the variable |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | The default when a per-task route names a model that has gone away — see the warning below |
+| `GROQ_RESEARCH_MODEL` | `groq/compound` | The agentic model used as a research connector |
+| `GEMINI_API_KEY` | *(empty)* | Fallback, and the second quota the high-volume stages alternate into |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Any model your key can reach |
 | `GEMINI_THINKING_BUDGET` | `0` | `0` disables thinking, which saves free-tier tokens; `-1` restores the model default |
-| `GROQ_API_KEY` | *(empty)* | Fallback provider |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Completes reliably inside Groq's free per-minute budget |
-| `GROQ_MAX_OUTPUT_TOKENS` | `4096` | Lower than Gemini's on purpose — Groq reserves this against its per-minute budget |
-| `ANALYSIS_SNIPPET_COUNT` | `4` | Grounding snippets injected per analysis |
+| `AI_ROUTE_*` | *(built-in defaults)* | Per-task model routing, e.g. `AI_ROUTE_DIAGNOSIS=gemini:,groq:openai/gpt-oss-120b`. One per stage |
+| `AI_CACHE_ENABLED` | `true` | Remembers model responses in Postgres, so a restart does not discard spent quota |
+| `AI_MAX_RATE_LIMIT_WAIT_SECONDS` | `60` | How long a stage waits for token budget before trying another model |
+| `RESEARCH_ENABLED` | `true` | Live research across the eleven keyless connectors |
+| `RESEARCH_MAX_DOCUMENTS` | `6` | **The main lever on run time.** Each document read costs a model call against a shared per-minute ceiling |
+| `RESEARCH_MAX_QUERIES` | `5` | Searches the planner may produce |
+| `RESEARCH_RESPECT_ROBOTS` | `true` | Honour robots.txt. A disallowed path is skipped and the source kept with its snippet |
+| `RESEARCH_TAVILY_API_KEY` / `RESEARCH_BRAVE_API_KEY` | *(empty)* | Optional keyed search. Dormant without a key; nothing depends on them |
+| `ANALYSIS_SNIPPET_COUNT` | `4` | Curated snippets used to ground a run whose live research found nothing |
 | `ANALYSIS_RATE_LIMIT_PER_MINUTE` | `20` | Protects the free AI quota from a double-clicked button |
 | `APP_CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated frontend origins |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | Frontend → backend (frontend build/runtime) |
 
 ### A warning about model ids and free-tier quotas
 
-Two things bite here, and both are configuration rather than code.
+Three things bite here, and all three are configuration rather than code.
 
-**Model availability changes without notice, and the `models` listing endpoint is not a reliable
-guide to what your key may actually call.** `gemini-2.5-flash` is still listed but returns *"no
-longer available to new users"* for a newly-issued key.
+**Model availability changes without notice, and a listing endpoint is not a reliable guide to what
+your key may actually call.** `gemini-2.5-flash` is still listed by Google but returns *"no longer
+available to new users"* for a newly-issued key. On the Groq side the same lesson arrived a second
+time: `llama-3.3-70b-versatile` — this project's own previous default — has been decommissioned
+outright, and every analysis using it would have failed with a 404. Pin a model you have actually
+called. The router now falls back through the provider chain, so a stale route degrades a run
+rather than ending it.
 
-**Free-tier quotas are small.** `gemini-3.7-flash` allows roughly 20 requests a day — enough to be
-exhausted during a rehearsal. The default is therefore `gemini-3.1-flash-lite` with thinking
-disabled, which is much cheaper per request, and Groq covers the case where even that runs out.
-Raise `GEMINI_MODEL` to `gemini-3.7-flash` if you want the higher-quality analysis and can spare
-the quota.
+**The tokens-per-minute ceiling is shared across models, not per model.** Groq publishes per-model
+limits and also enforces an organisation-wide cap — measured by watching a call to
+`groq/compound-mini` refused with *"Rate limit reached for model openai/gpt-oss-120b"*. Routing a
+stage to a second Groq model therefore buys a second daily request allowance, not extra throughput.
+The only real throughput multiplier is a second provider, which is why setting `GEMINI_API_KEY`
+alongside `GROQ_API_KEY` makes a visible difference to how long a run takes.
+
+**A full analysis costs about 30,000 tokens.** At 8,000 a minute that is a floor of roughly four
+minutes for a fresh run, most of it waiting. Lower `RESEARCH_MAX_DOCUMENTS` to trade evidence for
+speed; the response cache makes any re-run of an unchanged process near-instant.
 
 If `Analyze` returns a `502` mentioning the model was not found, check what your key can reach and
 set `GEMINI_MODEL` accordingly — no code change, no redeploy of the image:
@@ -303,10 +398,14 @@ at the cost of output changing between runs.
 | `PUT` | `/api/processes/{id}` | Replace the definition (clears any stale future state) |
 | `DELETE` | `/api/processes/{id}` | Delete the process and everything derived from it |
 | `POST` | `/api/processes/{id}/analyze` | Run the pipeline. Re-runnable and idempotent |
+| `POST` | `/api/processes/{id}/analyze/stream` | The same run, streaming its progress as Server-Sent Events, then the result |
 | `GET` | `/api/processes/{id}/comparison` | CURRENT / TRANSITION / FUTURE view with roll-up counters |
+| `GET` | `/api/processes/{id}/research` | The live research behind the stored analysis: queries, sources with their credibility arithmetic, and every claim with its checked quote |
 | `GET` | `/api/processes/{id}/analysis-runs` | Run history |
-| `GET` | `/api/processes/{id}/analysis-runs/latest/trace` | The exact prompt and raw model response |
-| `GET` | `/api/knowledge-snippets` | The curated research corpus |
+| `GET` | `/api/processes/{id}/analysis-runs/latest/trace` | Every stage, with the exact prompt sent and the exact text returned |
+| `GET` | `/api/processes/{id}/analysis-runs/{runId}/stages` | The same, for a specific run |
+| `GET` | `/api/system/ai-status` | Providers, per-task model routing, remaining free-tier budget, connector health |
+| `GET` | `/api/knowledge-snippets` | The curated fallback corpus |
 | `GET` | `/api/roles`, `/api/systems` | Reference lookups |
 | `GET` | `/actuator/health` | Liveness and readiness |
 
@@ -320,7 +419,8 @@ the health check:
 | `GET` | `/api/auth/me` | The account a token belongs to |
 
 The UI also has a plain-language **How it works** page at `/how-it-works`, written for someone
-meeting the project for the first time.
+meeting the project for the first time, and an **Engine** page at `/system` showing which model each
+stage will use and how much free-tier budget is left right now.
 
 Errors are RFC 7807 problem documents with actionable messages: `400` validation (with per-field
 detail), `404` not found, `409` an analysis is already running, `422` the model output was unusable
@@ -331,17 +431,36 @@ configured.
 
 ## Design decisions worth knowing about
 
-**Curated research instead of live web search.** A rate-limited search API is a dependency that can
-fail in front of judges, and its results are not reproducible or auditable afterwards. Instead, 16
-cited excerpts live in Postgres and are retrieved by keyword match. Every URL is real and was
-checked. The full reasoning, and the honest limitations, are in [docs/sources.md](docs/sources.md).
+**Live research, with the curated corpus kept as the fallback.** The first version of this
+application deliberately avoided live search: a rate-limited API is a dependency that can fail in
+front of judges, and its results are not auditable afterwards. Both halves of that turned out to be
+solvable, and the reason to solve them was strong — a fixed corpus of sixteen excerpts grounded
+every process in every industry identically, which is not research.
 
-**Two AI providers, tried in order.** The original design had one provider behind an interface and
-explicitly no failover, on the grounds that the brief asked for the "what if the free tier goes
-away" risk to be *explained* rather than engineered around. That reasoning did not survive contact
-with reality: Gemini's free tier ran out mid-testing at twenty requests, which would end a live
-demo. Groq now backs Gemini up. The `AiProvider` interface is what made this a new class plus a
-config value rather than a rewrite — which was the original point of having it.
+What made it defensible was auditing rather than trusting. Every source found is stored, every page
+read is stored, and every claim carries a quote that is then located in that stored text by string
+matching. The unreproducibility problem is answered by keeping the artefact; the fragility problem
+is answered by having eleven independent connectors, so one being blocked degrades a run instead of
+ending it. The curated corpus is still there and still used, as the grounding for a run that finds
+nothing. [docs/sources.md](docs/sources.md) covers both layers and their limitations.
+
+**Nothing a model says about its own sources is believed.** The single most important line of
+defence is twenty lines of string matching. A model asked to check its own citation will confirm it;
+a `String.indexOf` will not. Claims whose quotes fail that check are kept, marked unverified, and
+excluded from every grounding score — visible rather than hidden, because a citation nobody can
+check is worse than no citation if it is presented as though it could be.
+
+**The reviewer is a different model family.** Self-review is close to worthless: a model marking its
+own homework agrees with itself. Routing the review to Qwen while generation runs on GPT-OSS
+produces real disagreement, and that disagreement is the most useful thing a reader of a generated
+recommendation gets.
+
+**Groq primary, Gemini fallback — and the reason is arithmetic.** Gemini's free tier allows a few
+dozen requests a day, which a ten-stage pipeline exhausts in three runs; Groq allows a thousand a
+day per model. Gemini stays configured because a second provider is a genuinely separate quota, and
+on a free tier where the token ceiling is organisation-wide that is the only thing that actually
+multiplies throughput. Both sit behind one `AiProvider` interface, which is what made switching the
+primary a config change rather than a rewrite.
 
 **Client-side data fetching.** Server rendering would block on a cold Render instance and time out.
 Fetching in the browser lets the UI say "the backend is waking up".
@@ -353,11 +472,28 @@ third attempt, and a caller is waiting. One retry, then an honest `422` naming w
 discard an otherwise good analysis. Those items are dropped, and every drop is recorded as a warning
 visible on the run. Only a wholly unusable response triggers the retry.
 
+**Two stages are load-bearing; the other eight are not.** Without a diagnosis and without
+opportunities and a future state there is no analysis, and the run stops with a message naming the
+stage. Everything else may fail: a run that lost its roadmap is worth far more to the person waiting
+than no run at all, and the trace and the scorecard both say what was lost.
+
+**The impact model asks for inputs, never for answers.** A model asked "how much would this save?"
+returns a confident, unfalsifiable figure. Asked instead for volume, handling time, the share of
+that time genuinely removed and the hourly cost, it produces four numbers a reader can argue with —
+and the arithmetic happens in ordinary Java where it can be checked by hand.
+
+**Progress is streamed because the waiting is real.** A fresh analysis takes minutes, most of it
+queued behind a token bucket. Hiding that behind a spinner would make a working system look hung,
+and would hide the part worth seeing: the searches being planned, the sources arriving, the quotes
+being checked one at a time.
+
 ## Who can see what
 
 | Data | Scope |
 |---|---|
-| Research library, roles, systems | **Shared** — reference data; the same 16 sources ground everyone's analysis |
+| Curated corpus, roles, systems | **Shared** — reference data and the fallback grounding |
+| Live research runs and their sources | **Follow the process they were gathered for** |
+| Fetched page text | **Shared cache** — the same statute is read once a week rather than once per analysis, for politeness as much as speed |
 | The 6 sample processes | **Shared, read-only** — everyone sees and can analyse them; nobody can edit or delete them |
 | Processes you create | **Private to your account** — invisible to everyone else, in listing, search and by id |
 | Opportunities, future steps, runs | **Follow their process** — no separate ownership |
@@ -371,10 +507,13 @@ endpoints, which is the usual way authorisation bugs happen.
 ## What Phase 2 would add
 
 Multi-tenant organisations (teams sharing a workspace, rather than one account per person) ·
-password reset and email verification · embedding-based retrieval over a larger corpus ·
-versioned prompts with side-by-side comparison of runs · export to BPMN or Visio · effort and cost
-estimates per intervention · a review workflow so a human can accept or reject each opportunity
-before it becomes part of the stored future state.
+password reset and email verification · embedding-based retrieval so claims cluster by meaning
+rather than by shared vocabulary, which is what currently limits corroboration detection ·
+editable impact assumptions, so a user can replace a model's estimate with a measured figure and
+watch the business case recompute · versioned prompts with side-by-side comparison of runs · export
+to BPMN · a review workflow so a human can accept or reject each recommendation before it becomes
+part of the stored future state · PDF parsing, which would open up the statutes and standards that
+currently come back as snippet-only.
 
 ---
 
@@ -386,20 +525,29 @@ backend/                     Spring Boot service
     domain/                  JPA entities and enums
     repository/              Spring Data repositories
     dto/                     Request/response records; dto/ai/ is the model's contract
-    service/                 The pipeline — retrieval, prompting, parsing, validation, persistence
-    service/ai/              AiProvider interface, GeminiProvider, GroqProvider, FallbackAiProvider
+    service/                 Orchestration, persistence, validation, entity resolution
+    service/ai/              The model layer: AiGateway, ModelRouter, TokenBudgetGovernor,
+                             AiResponseCache, and the providers behind one interface
+    service/research/        The research layer: connectors, page fetcher, content extractor,
+                             claim extractor, QuoteVerifier, credibility scorer, corroboration
+    service/research/connector/  Eleven search connectors, one class each
+    service/pipeline/        The ten stages, the runner, the impact calculator, the scorecard
+    service/progress/        Progress events and the SSE sink
     controller/              REST endpoints and the RFC 7807 exception handler
-    config/                  Typed configuration properties, CORS, OpenAPI, provider chain
+    config/                  Typed configuration properties, CORS, OpenAPI, provider wiring
     security/                JWT issuing/decoding, security filter chain, current-user resolution
   src/main/resources/
-    db/migration/            Flyway: V1 schema, V2 sample data, V3 provider audit, V4 accounts
-    prompts/                 Prompt templates — text, not Java
-  src/test/java/             129 tests, integration tests on real PostgreSQL
+    db/migration/            Flyway: V1 schema, V2 sample data, V3 provider audit, V4 accounts,
+                             V5 research, staged pipeline, impact, risk, roadmap, scorecard, cache
+    prompts/                 Ten prompt templates — text, not Java
+  src/test/java/             165 tests, integration tests on real PostgreSQL
 
 frontend/src/
-  app/                       Login, dashboard, how-it-works, new-process form, detail page, evidence
-  components/                Comparison strip, tab content, run trace panel, UI primitives
-  lib/                       Typed API client, formatting, the resource-loading hook
+  app/                       Login, dashboard, process workspace, evidence, engine, how-it-works
+  components/                app-shell, charts (inline SVG), evidence (citations and the drawer),
+                             process-views (the ten tab panels), analysis-console (the live run),
+                             ui (primitives)
+  lib/                       Typed API client including the SSE reader, formatting, resource hook
 
 docs/
   README.md                  Index of every document
@@ -408,7 +556,7 @@ docs/
   data-model.md              ER diagram and the join path behind the chain
   technical-documentation.md Module map, API reference, config, security, operations
   diagrams/                  Each diagram as a PNG, with its Mermaid source beside it
-  sources.md                 The 16 curated sources and why the research layer works this way
+  sources.md                 The research layer: live connectors, the curated fallback, limitations
   demo-script.md             10–15 minute walkthrough
   ai-tools-disclosure.md     How AI tooling was used to build this
 ```

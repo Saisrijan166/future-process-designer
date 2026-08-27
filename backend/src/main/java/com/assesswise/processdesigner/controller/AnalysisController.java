@@ -141,7 +141,7 @@ public class AnalysisController {
                 outcome.persisted().risks(),
                 outcome.persisted().roadmapItems(),
                 outcome.persisted().citations(),
-                outcome.persisted().warnings(),
+                outcome.warnings(),
                 detail.latestRun(),
                 detail);
     }

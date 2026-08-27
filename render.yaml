@@ -38,12 +38,35 @@ services:
         sync: false
       - key: DATABASE_POOL_SIZE
         value: "3"
+      # Groq is the primary provider: its free tier allows a thousand requests a day per
+      # model against Gemini's few dozen, which is what makes a ten-stage pipeline
+      # affordable. Gemini stays as the fallback, and is genuinely useful because its
+      # quota is entirely separate from Groq's organisation-wide per-minute ceiling.
+      - key: AI_PROVIDER
+        value: groq
+      - key: AI_FALLBACK_PROVIDERS
+        value: gemini
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
       # Matches the application default. The lite model is deliberate: the full Flash
-      # models allow only ~20 requests a day on the free tier. Raise it here if you have
-      # the quota and want the richer analysis.
+      # models allow only ~20 requests a day on the free tier.
       - key: GEMINI_MODEL
         value: gemini-3.1-flash-lite
       # Thinking tokens are charged against the same free allowance and this task does
       # not need them.
       - key: GEMINI_THINKING_BUDGET
         value: "0"
+      # The ten-stage pipeline with live research. Set to "single" to fall back to the
+      # original one-prompt analysis, which costs one request instead of eight — worth
+      # doing if a daily quota is nearly spent.
+      - key: ANALYSIS_PIPELINE
+        value: staged
+      # Live research across free public search APIs. No keys required for any of the
+      # eleven connectors.
+      - key: RESEARCH_ENABLED
+        value: "true"
+      # Tuned for the free tier: each document read costs a model call against an
+      # organisation-wide 8,000 tokens-per-minute ceiling, so this number is the main
+      # lever on how long a fresh analysis takes.
+      - key: RESEARCH_MAX_DOCUMENTS
+        value: "6"

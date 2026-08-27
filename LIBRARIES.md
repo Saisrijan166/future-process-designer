@@ -13,8 +13,8 @@ Versions below are the ones resolved by the committed `pom.xml` and `package-loc
 
 | Service | Used for | Plan | Licence / terms | If it stopped being free |
 |---|---|---|---|---|
-| **Google AI Studio (Gemini API)** | Primary AI provider — `gemini-3.1-flash-lite` | Free tier | [Gemini API terms](https://ai.google.dev/gemini-api/terms); free tier has tight per-minute and per-day request limits | Groq already backs it up automatically (below). Beyond that, the model call sits behind a single `AiProvider` interface, so an OpenAI-compatible endpoint or a locally-run Ollama model is one new class plus a config value. |
-| **Groq Cloud** | Fallback AI provider — `llama-3.3-70b-versatile` | Free tier | [Groq terms](https://groq.com/terms-of-use/); free tier has per-minute token limits and a generous daily allowance | It *is* the answer to Gemini becoming unavailable. If both were to disappear, the same interface takes any OpenAI-compatible endpoint. |
+| **Google AI Studio (Gemini API)** | Fallback AI provider, and the second quota that makes high-volume stages viable — `gemini-3.1-flash-lite` | Free tier | [Gemini API terms](https://ai.google.dev/gemini-api/terms); free tier has tight per-minute and per-day request limits | Groq already backs it up automatically (below). Beyond that, the model call sits behind a single `AiProvider` interface, so an OpenAI-compatible endpoint or a locally-run Ollama model is one new class plus a config value. |
+| **Groq Cloud** | Primary AI provider — `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`, and `groq/compound` for agentic search | Free tier | [Groq terms](https://groq.com/terms-of-use/); measured free tier is ~1,000 requests/day per model with an **organisation-wide 8,000 tokens-per-minute ceiling shared across models** | Gemini already backs it up automatically, and Cerebras, OpenRouter and a local Ollama are configuration entries against the same OpenAI-compatible client — a base URL, a key and a model name. |
 | **Neon** | PostgreSQL (serverless) | Free tier | Free plan, no card required | Any PostgreSQL 13+ works. Supabase's free tier is a drop-in: change `DATABASE_URL`. The schema uses no Neon-specific features. |
 | **Render** | Backend hosting (Docker web service) | Free | Free plan; instance sleeps after 15 min idle, ~50s cold start | The deployable is a plain Spring Boot jar in a standard Dockerfile — Fly.io, Railway, Koyeb or any container host takes it unchanged. |
 | **Vercel** | Frontend hosting | Free hobby | Hobby plan | A stock Next.js app; Netlify or Cloudflare Pages deploy it with no code change, or `next build && next start` on any Node host. |
@@ -23,8 +23,16 @@ Versions below are the ones resolved by the committed `pom.xml` and `package-loc
 
 | Model | Role | Provider | Configurable via | Cost |
 |---|---|---|---|---|
-| `gemini-3.1-flash-lite` | Primary | Google | `GEMINI_MODEL` | Free tier |
-| `llama-3.3-70b-versatile` | Fallback | Groq (Meta weights) | `GROQ_MODEL` | Free tier |
+| `openai/gpt-oss-120b` | Diagnosis, opportunities, future-state design — the three stages that genuinely need the strongest model | Groq (OpenAI weights) | `GROQ_MODEL`, `AI_ROUTE_*` | Free tier |
+| `openai/gpt-oss-20b` | Claim extraction and query planning: high volume, close to mechanical | Groq (OpenAI weights) | `AI_ROUTE_CLAIM_EXTRACTION` | Free tier |
+| `qwen/qwen3.8-27b` | The adversarial review, and the risk register | Groq (Alibaba weights) | `AI_ROUTE_CRITIQUE` | Free tier |
+| `groq/compound` | Agentic web search: runs its own searches and returns the pages it read | Groq | `GROQ_RESEARCH_MODEL` | Free tier |
+| `gemini-3.1-flash-lite` | Quantification and roadmap, plus fallback for every stage | Google | `GEMINI_MODEL` | Free tier |
+
+The review deliberately runs on a **different model family** from the generation. A model
+asked to check its own work agrees with itself; a Qwen model reviewing a GPT-OSS model's
+proposals disagrees often enough to be worth reading, and that disagreement is what the
+confidence scores are built from.
 
 The original plan named `gemini-1.5-flash`. That model is retired. `gemini-2.5-flash` was tried
 next and **also failed** — it is still returned by the `models` endpoint, but calling it with a
@@ -47,10 +55,54 @@ allows roughly 20 requests a day — it was exhausted during a single testing se
 therefore `gemini-3.1-flash-lite` with thinking disabled (thinking tokens are charged against the
 same allowance and this task does not need them), which cut a typical run from 27 seconds to 8.
 
-**On the Groq side**, `llama-3.3-70b-versatile` is chosen for reliability rather than quality:
-`openai/gpt-oss-120b` writes noticeably richer analysis but only gets ~8k tokens per minute on the
-free tier, so it truncates mid-response and then rate-limits on the repair retry. A fallback that
-fails is not a fallback.
+**On the Groq side, the same lesson arrived a second time.** `llama-3.3-70b-versatile` was the
+default here until it was decommissioned: it is no longer in Groq's model list at all, and every
+analysis using it would have failed with a 404. The models above were verified with live
+`chat/completions` calls on 27-08-2026, and the router now falls back through the configured
+provider chain so that a stale route degrades a run instead of ending it.
+
+**The free tier's real shape**, measured rather than read off a documentation page:
+
+| Model | Requests/day | Tokens/minute | Measured cost per call |
+|---|---|---|---|
+| `openai/gpt-oss-120b`, `gpt-oss-20b`, `qwen/qwen3.*` | 1,000 | 8,000 | 3,000–7,000 |
+| `groq/compound`, `compound-mini` | 250 | 70,000 | 10,000–17,000 |
+
+The important part is not in that table. Groq publishes per-model limits **and enforces an
+organisation-wide tokens-per-minute ceiling across every model** — observed directly, by watching a
+call to `groq/compound-mini` refused with *"Rate limit reached for model openai/gpt-oss-120b"*. So
+routing a stage to a second Groq model buys a second daily request allowance, not extra throughput;
+the only real throughput multiplier is a second provider, which is why Gemini serves the
+quantification and roadmap stages and why claim extraction alternates between the two.
+
+---
+
+## Research connectors
+
+Eleven sources, every one free and **none requiring an API key or an account**. Each was verified
+with a live request on 27-08-2026; the date matters, because this is the layer most likely to rot.
+
+| Connector | Endpoint | Terms | Notes |
+|---|---|---|---|
+| Bing web search | `bing.com/search?format=rss` | Public RSS output | The backbone general-web connector. A documented output format rather than scraping. |
+| Bing News | `bing.com/news/search?format=RSS` | Public RSS output | A second, independently-indexed news source. |
+| Google News | `news.google.com/rss/search` | Public RSS output | Links are redirects; the real publisher comes from the feed's `<source url>`. |
+| Wikipedia | `en.wikipedia.org/w/api.php` | CC BY-SA content, open API | Establishes a domain's vocabulary so the other connectors get better queries. |
+| OpenAlex | `api.openalex.org` | CC0 data, open API, polite pool via `mailto` | ~250M scholarly works. Abstracts arrive inverted and are reassembled. |
+| Crossref | `api.crossref.org` | Open API, polite pool via `mailto` | The DOI registry. Overlaps OpenAlex deliberately — different results for the same words is what corroboration needs. |
+| arXiv | `export.arxiv.org/api/query` | Open API, request-rate terms | Preprints, and its abstract pages are HTML rather than PDF so they can actually be quoted. |
+| Europe PMC | `ebi.ac.uk/europepmc/webservices/rest` | Open API | Medical-education literature: examiner reliability, rater agreement, OSCE grading. |
+| Hacker News | `hn.algolia.com/api/v1` | Free public API | What happened when someone shipped it, which no paper reports. Scored as practitioner evidence. |
+| Stack Exchange | `api.stackexchange.com/2.3` | Free, 300 requests/day unauthenticated | Implementation constraints, for the feasibility judgement. |
+| Groq agentic search | `groq/compound` via the chat API | Groq free tier | Runs its own searches server-side and returns the pages it read, which are stored and quote-verified like any other source. |
+
+**Deliberately absent.** DuckDuckGo's HTML endpoint returns an anomaly page to server-side
+requests, public SearX instances return a captcha, and GDELT did not respond from a server at all.
+They are excluded rather than left in place to fail silently — a connector that always returns
+nothing looks identical to a topic with no coverage.
+
+**Optional and dormant:** Tavily and Brave are wired up and stay switched off unless a key is
+supplied. Nothing in the default configuration depends on them.
 
 ---
 
@@ -72,6 +124,7 @@ Runtime: **Eclipse Temurin JDK 21** (GPL-2.0 with Classpath Exception).
 | `flyway-core` | 11.7.2 | Apache-2.0 | Versioned schema migrations |
 | `flyway-database-postgresql` | 11.7.2 | Apache-2.0 | Postgres support for Flyway 11 |
 | `postgresql` (JDBC driver) | 42.7.11 | BSD-2-Clause | Database connectivity |
+| `jsoup` | 1.23.2 | MIT | HTML parsing and main-content extraction for the research layer, and XML parsing for the RSS and Atom connectors. Fetched pages are hostile — unclosed tags, script-injected bodies, navigation outweighing the article — and a strict parser rejects a whole document over one bad character. |
 | `springdoc-openapi-starter-webmvc-ui` | 2.8.17 | Apache-2.0 | OpenAPI document and Swagger UI at `/swagger-ui.html` |
 | `lombok` | 1.18.46 | MIT | Getters/setters on JPA entities; compile-time only, excluded from the jar |
 | `spring-boot-configuration-processor` | 3.5.16 | Apache-2.0 | IDE metadata for `@ConfigurationProperties`; compile-time only |
