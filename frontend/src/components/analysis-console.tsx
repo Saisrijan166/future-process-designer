@@ -89,7 +89,9 @@ export function AnalysisConsole({
   const feedId = useRef(0);
   const feedRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const startedAt = useRef(Date.now());
+  // Stamped when the timer attaches, not during render: the wall clock is an external system and
+  // reading it while rendering makes the component's output depend on when React happened to call it.
+  const startedAt = useRef(0);
 
   const pushFeed = useCallback((entry: Omit<FeedEntry, "id">) => {
     setFeed((current) => {
@@ -222,6 +224,7 @@ export function AnalysisConsole({
 
   useEffect(() => {
     if (finished) return;
+    if (startedAt.current === 0) startedAt.current = Date.now();
     const timer = window.setInterval(
       () => setElapsed(Math.round((Date.now() - startedAt.current) / 1000)),
       1000,

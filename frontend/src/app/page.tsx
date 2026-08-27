@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatTile } from "@/components/charts";
-import { Badge, Button, ButtonLink, EmptyState, ErrorPanel, Panel, SectionHeading, Skeleton } from "@/components/ui";
+import { Badge, Button, ButtonLink, EmptyState, ErrorPanel, Panel, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";

@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { Badge, Button, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -87,10 +94,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -129,6 +132,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               isActive={isActive}
               user={user?.displayName ?? null}
               onSignOut={signOut}
+              // Navigating is the only way out of the sheet other than dismissing it, so the links
+              // close it themselves. Watching the pathname from an effect would do the same thing
+              // one render later, for every visitor, on every page.
+              onNavigate={() => setMobileOpen(false)}
               onOpenPalette={() => {
                 setMobileOpen(false);
                 setPaletteOpen(true);
@@ -166,11 +173,14 @@ function SidebarContent({
   user,
   onSignOut,
   onOpenPalette,
+  onNavigate,
 }: {
   isActive: (href: string) => boolean;
   user: string | null;
   onSignOut: () => void;
   onOpenPalette: () => void;
+  /** Set only by the narrow-screen sheet, which has to dismiss itself when a link is followed. */
+  onNavigate?: () => void;
 }) {
   return (
     <>
@@ -217,6 +227,7 @@ function SidebarContent({
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={`flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-colors ${
                 active
@@ -241,6 +252,7 @@ function SidebarContent({
       <div className="mt-4 px-3 pb-3">
         <Link
           href="/processes/new"
+          onClick={onNavigate}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--surface-inverse)] px-3 py-2 text-[0.8125rem] font-medium text-[var(--text-inverse)] hover:opacity-90"
         >
           <svg viewBox="0 0 14 14" className="size-3.5" aria-hidden="true">
@@ -269,6 +281,53 @@ function SidebarContent({
   );
 }
 
+type ThemeChoice = "light" | "dark" | "system";
+
+const THEME_KEY = "afpd.theme";
+const themeListeners = new Set<() => void>();
+
+/**
+ * The chosen theme lives in `localStorage` and on the root element, not in React state.
+ *
+ * <p>It has to: a script in the document head applies it before the first paint, so React is not
+ * the source of truth and cannot be. Treating it as an external store — rather than as state
+ * initialised by an effect — also means a change in another tab is picked up, and means the toggle
+ * renders the real value on its first paint instead of "system" followed by a correction.
+ */
+function readTheme(): ThemeChoice {
+  try {
+    const stored = window.localStorage.getItem(THEME_KEY);
+    return stored === "light" || stored === "dark" ? stored : "system";
+  } catch {
+    // Private browsing, or site data blocked. The pre-paint script fails the same way, silently.
+    return "system";
+  }
+}
+
+function subscribeTheme(listener: () => void) {
+  themeListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    themeListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function writeTheme(next: ThemeChoice) {
+  if (next === "system") {
+    delete document.documentElement.dataset.theme;
+  } else {
+    document.documentElement.dataset.theme = next;
+  }
+  try {
+    if (next === "system") window.localStorage.removeItem(THEME_KEY);
+    else window.localStorage.setItem(THEME_KEY, next);
+  } catch {
+    // The theme still applies for this page; it just will not be remembered.
+  }
+  themeListeners.forEach((listener) => listener());
+}
+
 /**
  * Light, dark, or whatever the operating system says.
  *
@@ -277,26 +336,8 @@ function SidebarContent({
  * override that persists.
  */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem("afpd.theme");
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-      document.documentElement.dataset.theme = stored;
-    }
-  }, []);
-
-  const apply = (next: "light" | "dark" | "system") => {
-    setTheme(next);
-    if (next === "system") {
-      delete document.documentElement.dataset.theme;
-      window.localStorage.removeItem("afpd.theme");
-    } else {
-      document.documentElement.dataset.theme = next;
-      window.localStorage.setItem("afpd.theme", next);
-    }
-  };
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "system" as ThemeChoice);
+  const apply = writeTheme;
 
   const next = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
   const label = { system: "Match system", light: "Light", dark: "Dark" }[theme];
@@ -413,7 +454,6 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
             <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.4" />
             <path d="M9 9l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
-          {/* eslint-disable-next-line jsx-a11y/no-autofocus -- the palette exists to be typed into */}
           <input
             autoFocus
             value={query}

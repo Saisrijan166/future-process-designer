@@ -22,7 +22,6 @@ import {
   GroundingBadge,
   SOURCE_TYPE_COLOURS,
   SOURCE_TYPE_LABELS,
-  SourceDetail,
   VerificationBadge,
   credibilityTone,
   FETCH_STATUS_TEXT,

@@ -5,7 +5,6 @@ import { StatTile } from "@/components/charts";
 import { Badge, ErrorPanel, Panel, SectionHeading, Skeleton, StatusDot } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useApiResource } from "@/lib/use-api-resource";
-import type { AiStatus } from "@/lib/types";
 
 /**
  * What the engine can do right now.

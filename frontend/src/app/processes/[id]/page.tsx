@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisConsole } from "@/components/analysis-console";
 import {
   CurrentPanel,
@@ -52,42 +52,50 @@ export default function ProcessPage() {
   // The new-process form redirects here with ?analyze=1, so creating a process and analysing it is
   // one action rather than two — the second of which a first-time visitor would not know to take.
   const [analysing, setAnalysing] = useState(search.get("analyze") === "1");
+  // `null` means "not fetched yet" for both, which is what the loading state is derived from —
+  // there is no separate loading flag to keep in step with the data.
   const [research, setResearch] = useState<ResearchRun | null>(null);
-  const [researchLoading, setResearchLoading] = useState(false);
-  const [stages, setStages] = useState<AnalysisStage[]>([]);
-  const [stagesLoading, setStagesLoading] = useState(false);
+  const [researchSettled, setResearchSettled] = useState(false);
+  const [stages, setStages] = useState<AnalysisStage[] | null>(null);
+  const requested = useRef({ research: false, stages: false });
 
   const load = useCallback(() => api.getProcess(processId), [processId]);
   const { data: detail, error, loading, reload, replace } = useApiResource(load);
 
   // The evidence and trace tabs pull their own data, and only when opened. Both are large — every
-  // quote, every prompt — and most visits never open them.
+  // quote, every prompt — and most visits never open them. The in-flight guard is a ref rather than
+  // state so the effect starts a request without also queueing a render.
   useEffect(() => {
-    if (tab !== "evidence" || research || researchLoading || !detail) return;
-    setResearchLoading(true);
+    if (tab !== "evidence" || !detail || requested.current.research) return;
+    requested.current.research = true;
     api
       .getResearch(processId)
       .then(setResearch)
       .catch(() => setResearch(null))
-      .finally(() => setResearchLoading(false));
-  }, [tab, research, researchLoading, detail, processId]);
+      .finally(() => setResearchSettled(true));
+  }, [tab, detail, processId]);
 
   useEffect(() => {
-    if (tab !== "trace" || stages.length > 0 || stagesLoading || !detail?.latestRun) return;
-    setStagesLoading(true);
+    if (tab !== "trace" || !detail?.latestRun || requested.current.stages) return;
+    requested.current.stages = true;
+    const runId = detail.latestRun.id;
     api
-      .getRunStages(processId, detail.latestRun.id)
+      .getRunStages(processId, runId)
       .then(setStages)
-      .catch(() => setStages([]))
-      .finally(() => setStagesLoading(false));
-  }, [tab, stages.length, stagesLoading, detail, processId]);
+      .catch(() => setStages([]));
+  }, [tab, detail, processId]);
+
+  const researchLoading = tab === "evidence" && !!detail && !researchSettled;
+  const stagesLoading = tab === "trace" && !!detail?.latestRun && stages === null;
 
   const onAnalysisComplete = useCallback(
     (result: AnalysisResult) => {
       replace(result.detail);
       // Both are now stale: the run that produced them has been replaced.
+      requested.current = { research: false, stages: false };
       setResearch(null);
-      setStages([]);
+      setResearchSettled(false);
+      setStages(null);
       toast.push({
         tone: result.warnings.length > 0 ? "warning" : "good",
         title: "Analysis complete",
@@ -266,7 +274,7 @@ export default function ProcessPage() {
         {tab === "evidence" ? (
           <EvidencePanel research={research} loading={researchLoading} detail={detail} />
         ) : null}
-        {tab === "trace" ? <TracePanel stages={stages} detail={detail} loading={stagesLoading} /> : null}
+        {tab === "trace" ? <TracePanel stages={stages ?? []} detail={detail} loading={stagesLoading} /> : null}
       </div>
     </div>
   );
