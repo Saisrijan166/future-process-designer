@@ -30,10 +30,12 @@ import org.springframework.stereotype.Component;
  * being blocked — and it arrives with the body text already extracted, so those sources need no
  * fetch, no reader fallback and no politeness delay.
  *
- * <p>The cost is real and bounded accordingly: 250 requests a day on the free tier against 1,000
- * for the general models, so it is called once per run with the whole research brief rather than
- * once per query. Its 70,000 tokens-a-minute allowance is nearly nine times the general models',
- * which is why one large call is the right shape.
+ * <p>The cost is real and bounded accordingly. Each call spends 10,000-17,000 tokens, because the
+ * searches it runs and the pages it reads all land in its own context, and its allowance is 70,000
+ * tokens a minute — so four questions in quick succession get the last two refused outright. It is
+ * therefore capped at two calls per run and pointed at the run's best questions, and the token
+ * governor is told its real cost rather than the size of the 300-character prompt this application
+ * actually sends.
  */
 @Component
 public class GroqAgentConnector implements SearchConnector {
@@ -77,6 +79,17 @@ public class GroqAgentConnector implements SearchConnector {
     @Override
     public boolean isEnabled() {
         return aiGateway.isConfigured();
+    }
+
+    /**
+     * Twice per run. Measured: each call spends 10,000-17,000 tokens of the model's 70,000
+     * tokens-a-minute allowance, so a third and fourth call in the same run are refused with a 413
+     * rather than answered. Two calls on the run's two best questions is the whole of what this
+     * connector can usefully contribute.
+     */
+    @Override
+    public int maxInvocationsPerRun() {
+        return 2;
     }
 
     @Override

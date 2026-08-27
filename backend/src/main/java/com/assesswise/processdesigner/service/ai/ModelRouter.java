@@ -82,9 +82,10 @@ public class ModelRouter {
             });
         }
 
-        // Whatever the routing table says, the configured provider chain is always available as a
-        // last resort — a stale route to a decommissioned model must not be able to fail a run.
-        for (String providerName : chainOrder()) {
+        // Whatever the routing table says, the configured provider chain is normally available as a
+        // last resort — a stale route to a decommissioned model must not be able to fail a run. The
+        // exception is a task that needs a specific capability rather than a competent model.
+        for (String providerName : task.chainFallbackUseful() ? chainOrder() : List.<String>of()) {
             registry.find(providerName)
                     .filter(AiProvider::isConfigured)
                     .ifPresent(provider -> {
@@ -95,7 +96,7 @@ public class ModelRouter {
                     });
         }
 
-        if (candidates.isEmpty()) {
+        if (candidates.isEmpty() && task.chainFallbackUseful()) {
             // Tests register a scripted provider under a name no route mentions.
             registry.configured().forEach(provider -> candidates.add(new Candidate(provider, provider.model())));
         }

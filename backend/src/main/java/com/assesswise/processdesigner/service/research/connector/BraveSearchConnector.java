@@ -75,7 +75,8 @@ public class BraveSearchConnector implements SearchConnector {
         HttpResearchClient.Response response = httpClient.get(endpoint,
                 Map.of("X-Subscription-Token", config.apiKey(), "Accept", "application/json"), 1024 * 1024);
         if (!response.isSuccess()) {
-            log.info("{} returned HTTP {}", id(), response.status());
+            log.info("{} could not answer '{}': HTTP {} {}", id(), query.text(), response.status(),
+                    response.failure() == null ? "" : response.failure());
             return List.of();
         }
         try {

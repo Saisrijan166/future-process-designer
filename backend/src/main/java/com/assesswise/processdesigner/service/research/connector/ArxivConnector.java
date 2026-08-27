@@ -64,10 +64,11 @@ public class ArxivConnector implements SearchConnector {
     @Override
     public List<SearchHit> search(ResearchQuerySpec query, int limit) {
         String url = ENDPOINT.formatted(
-                HttpResearchClient.encode(quoteForArxiv(query.text())), Math.min(12, limit));
+                HttpResearchClient.encode(narrow(query.text())), Math.min(12, limit));
         HttpResearchClient.Response response = httpClient.get(url);
         if (!response.isSuccess()) {
-            log.info("{} returned HTTP {}", id(), response.status());
+            log.info("{} could not answer '{}': HTTP {} {}", id(), query.text(), response.status(),
+                    response.failure() == null ? "" : response.failure());
             return List.of();
         }
         List<SearchHit> hits = new ArrayList<>();
@@ -89,12 +90,26 @@ public class ArxivConnector implements SearchConnector {
     }
 
     /**
-     * arXiv's query language treats spaces as a boolean AND across the whole index, which turns a
-     * six-word question into a search for papers containing all six words anywhere. Quoting keeps
-     * the phrase together, which is what the planner meant.
+     * Trims the query to the terms arXiv can actually match.
+     *
+     * <p>arXiv ANDs every word in an {@code all:} search across the whole index, so a seven-word
+     * question matches papers containing all seven words anywhere and usually returns nothing.
+     * Quoting the phrase is worse still — an exact-phrase search over paper text returns nothing at
+     * all, which is how this connector originally came back empty on a query the plain form answered
+     * with five results. So: no quotes, and the six most distinctive words, dropping the short
+     * connectives that carry no signal in an AND.
      */
-    private String quoteForArxiv(String text) {
-        String cleaned = text.replace('"', ' ').trim();
-        return cleaned.split("\\s+").length > 2 ? "\"" + cleaned + "\"" : cleaned;
+    private String narrow(String text) {
+        String[] words = text.replaceAll("[\"'()]", " ").trim().split("\\s+");
+        List<String> kept = new ArrayList<>(words.length);
+        for (String word : words) {
+            if (word.length() > 3) {
+                kept.add(word);
+            }
+            if (kept.size() == 6) {
+                break;
+            }
+        }
+        return kept.isEmpty() ? text : String.join(" ", kept);
     }
 }

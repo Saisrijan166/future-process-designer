@@ -49,6 +49,18 @@ public interface SearchConnector {
     }
 
     /**
+     * How many times one research run may call this connector.
+     *
+     * <p>Unlimited for the keyless connectors, which cost nothing but an HTTP request. It exists for
+     * the agentic one: a {@code groq/compound} call spends 10,000-17,000 tokens of a 70,000
+     * tokens-per-minute allowance, so asking it six questions means the last four are refused. One
+     * good question is worth more than six rejected ones.
+     */
+    default int maxInvocationsPerRun() {
+        return Integer.MAX_VALUE;
+    }
+
+    /**
      * Runs one query.
      *
      * @return up to {@code limit} results, or an empty list if this connector could not answer.

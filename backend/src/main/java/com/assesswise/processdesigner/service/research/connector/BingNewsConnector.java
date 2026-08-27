@@ -62,7 +62,8 @@ public class BingNewsConnector implements SearchConnector {
         HttpResearchClient.Response response =
                 httpClient.get(ENDPOINT.formatted(HttpResearchClient.encode(query.text())));
         if (!response.isSuccess()) {
-            log.info("{} returned HTTP {} for '{}'", id(), response.status(), query.text());
+            log.info("{} could not answer '{}': HTTP {} {}", id(), query.text(), response.status(),
+                    response.failure() == null ? "" : response.failure());
             return List.of();
         }
         List<SearchHit> hits = new ArrayList<>();

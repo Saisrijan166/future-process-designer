@@ -104,8 +104,12 @@ public class AiGateway {
             ModelRouter.Candidate candidate = candidates.get(index);
             boolean isLast = index == candidates.size() - 1;
 
-            int estimatedTokens = prepared.estimatedPromptTokens()
-                    + (prepared.maxOutputTokens() == null ? task.defaultMaxOutputTokens() : prepared.maxOutputTokens());
+            int estimatedTokens = Math.max(
+                    task.budgetFloorTokens(),
+                    prepared.estimatedPromptTokens()
+                            + (prepared.maxOutputTokens() == null
+                                    ? task.defaultMaxOutputTokens()
+                                    : prepared.maxOutputTokens()));
 
             // The last candidate is asked to wait as long as it takes: there is nowhere left to
             // route to, so refusing on budget would fail a run that only needed patience.

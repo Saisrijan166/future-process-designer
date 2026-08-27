@@ -69,7 +69,8 @@ public class HackerNewsConnector implements SearchConnector {
         String url = ENDPOINT.formatted(HttpResearchClient.encode(query.text()), Math.min(20, limit * 2));
         HttpResearchClient.Response response = httpClient.get(url);
         if (!response.isSuccess()) {
-            log.info("{} returned HTTP {}", id(), response.status());
+            log.info("{} could not answer '{}': HTTP {} {}", id(), query.text(), response.status(),
+                    response.failure() == null ? "" : response.failure());
             return List.of();
         }
         try {

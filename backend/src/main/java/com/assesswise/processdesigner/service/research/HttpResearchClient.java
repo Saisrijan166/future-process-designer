@@ -59,6 +59,12 @@ public class HttpResearchClient {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(8))
                 .followRedirects(HttpClient.Redirect.NORMAL)
+                // Pinned to HTTP/1.1 after Europe PMC's API failed at the transport layer on every
+                // request while answering the identical URL from curl. Several public API gateways
+                // negotiate HTTP/2 and then behave badly with the JDK client; nothing here needs
+                // multiplexing, and a research connector that silently returns nothing is the worst
+                // possible failure mode because it looks like "no results".
+                .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
 

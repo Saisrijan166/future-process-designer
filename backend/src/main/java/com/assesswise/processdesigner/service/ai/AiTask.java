@@ -25,8 +25,16 @@ public enum AiTask {
     /** Reads the current state and names the real problems and their root causes. */
     DIAGNOSIS("diagnosis", 3000, 0.2),
 
-    /** Runs an agentic web search and returns what it read. Needs room for tool output. */
-    RESEARCH_AGENT("research-agent", 2400, 0.2),
+    /**
+     * Runs an agentic web search and returns what it read.
+     *
+     * <p>The budget floor is the important number here and it is measured, not guessed: a single
+     * {@code groq/compound} call costs 10,000-17,000 tokens, because the model's own web searches
+     * and the pages it reads all land in its context. The prompt this application sends is 300
+     * characters, so estimating cost from the prompt would be wrong by a factor of fifty and the
+     * governor would wave four calls through that together exceed the whole per-minute allowance.
+     */
+    RESEARCH_AGENT("research-agent", 2400, 0.2, 18_000, false),
 
     /** Turns one fetched page into atomic claims, each with a verbatim quote. High volume. */
     CLAIM_EXTRACTION("claim-extraction", 2000, 0.1),
@@ -58,11 +66,28 @@ public enum AiTask {
     private final String id;
     private final int defaultMaxOutputTokens;
     private final double defaultTemperature;
+    private final int budgetFloorTokens;
+    private final boolean chainFallbackUseful;
 
     AiTask(String id, int defaultMaxOutputTokens, double defaultTemperature) {
+        this(id, defaultMaxOutputTokens, defaultTemperature, 0);
+    }
+
+    AiTask(String id, int defaultMaxOutputTokens, double defaultTemperature, int budgetFloorTokens) {
+        this(id, defaultMaxOutputTokens, defaultTemperature, budgetFloorTokens, true);
+    }
+
+    AiTask(
+            String id,
+            int defaultMaxOutputTokens,
+            double defaultTemperature,
+            int budgetFloorTokens,
+            boolean chainFallbackUseful) {
         this.id = id;
         this.defaultMaxOutputTokens = defaultMaxOutputTokens;
         this.defaultTemperature = defaultTemperature;
+        this.budgetFloorTokens = budgetFloorTokens;
+        this.chainFallbackUseful = chainFallbackUseful;
     }
 
     /** Configuration key, e.g. {@code app.ai.routing.claim-extraction}. */
@@ -76,6 +101,29 @@ public enum AiTask {
 
     public double defaultTemperature() {
         return defaultTemperature;
+    }
+
+    /**
+     * The least budget this task should be charged, regardless of how short its prompt is.
+     *
+     * <p>Exists for tasks whose real cost is invisible from the request — an agentic model that
+     * runs its own searches spends most of its tokens on material this application never sends.
+     * Zero for every ordinary task, where prompt plus output ceiling is the honest estimate.
+     */
+    public int budgetFloorTokens() {
+        return budgetFloorTokens;
+    }
+
+    /**
+     * Whether falling back to whatever general model is configured is better than not running.
+     *
+     * <p>Almost always yes: a weaker model's diagnosis beats no diagnosis. False for
+     * {@link #RESEARCH_AGENT}, where the capability being asked for is web search rather than
+     * language — a general model handed that prompt answers from memory, reports no sources, and
+     * spends quota producing nothing this application can cite.
+     */
+    public boolean chainFallbackUseful() {
+        return chainFallbackUseful;
     }
 
     public static Optional<AiTask> fromId(String value) {

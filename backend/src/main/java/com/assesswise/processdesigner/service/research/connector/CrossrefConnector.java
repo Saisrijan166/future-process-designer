@@ -67,7 +67,8 @@ public class CrossrefConnector implements SearchConnector {
         String url = ENDPOINT.formatted(HttpResearchClient.encode(query.text()), Math.min(15, limit));
         HttpResearchClient.Response response = httpClient.get(url);
         if (!response.isSuccess()) {
-            log.info("{} returned HTTP {}", id(), response.status());
+            log.info("{} could not answer '{}': HTTP {} {}", id(), query.text(), response.status(),
+                    response.failure() == null ? "" : response.failure());
             return List.of();
         }
         try {

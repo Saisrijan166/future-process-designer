@@ -76,7 +76,8 @@ public class StackExchangeConnector implements SearchConnector {
             String url = ENDPOINT.formatted(HttpResearchClient.encode(query.text()), site, perSite);
             HttpResearchClient.Response response = httpClient.get(url);
             if (!response.isSuccess()) {
-                log.debug("{} ({}) returned HTTP {}", id(), site, response.status());
+                log.debug("{} ({}) could not answer: HTTP {} {}", id(), site, response.status(),
+                        response.failure() == null ? "" : response.failure());
                 continue;
             }
             try {

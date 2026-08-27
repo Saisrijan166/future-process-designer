@@ -1,0 +1,28 @@
+# Profile for LiveResearchSmokeTest only: real providers, real connectors, real internet.
+# Every other test runs under the "test" profile with a scripted provider and no network.
+spring:
+  flyway:
+    clean-disabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+app:
+  auth:
+    demo-account:
+      enabled: false
+  analysis:
+    rate-limit:
+      enabled: false
+  research:
+    enabled: true
+    # Smaller than production defaults: this test is checking that the plumbing works, not
+    # gathering evidence, and it should not spend a demo's worth of free-tier quota to do it.
+    max-queries: 2
+    hits-per-query: 5
+    max-documents: 3
+    max-claims: 8
+
+logging:
+  level:
+    com.assesswise.processdesigner: INFO

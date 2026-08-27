@@ -94,7 +94,7 @@ CREATE INDEX idx_research_query_run ON research_query (research_run_id, display_
 -- Two analyses that both cite the same standards page fetch it once.
 CREATE TABLE web_document (
     id             UUID         PRIMARY KEY,
-    url_hash       CHAR(64)     NOT NULL,
+    url_hash       VARCHAR(64)  NOT NULL,
     url            VARCHAR(1000) NOT NULL,
     canonical_url  VARCHAR(1000),
     domain         VARCHAR(253) NOT NULL,
@@ -103,7 +103,7 @@ CREATE TABLE web_document (
     published_at   DATE,
     content_text   TEXT         NOT NULL,
     content_chars  INTEGER      NOT NULL,
-    content_hash   CHAR(64)     NOT NULL,
+    content_hash   VARCHAR(64)  NOT NULL,
     http_status    INTEGER,
     fetch_method   VARCHAR(20)  NOT NULL,
     language       VARCHAR(12),
@@ -378,7 +378,7 @@ CREATE INDEX idx_analysis_scorecard_process ON analysis_scorecard (process_id, c
 -- ---------------------------------------------------------------------
 
 CREATE TABLE ai_cache (
-    cache_key       CHAR(64)     PRIMARY KEY,
+    cache_key       VARCHAR(64)  PRIMARY KEY,
     task            VARCHAR(40)  NOT NULL,
     provider        VARCHAR(40)  NOT NULL,
     model           VARCHAR(120) NOT NULL,

@@ -13,11 +13,7 @@ import org.junit.jupiter.api.Test;
 class AnalysisRateLimiterTest {
 
     private static AppProperties properties(boolean enabled, int permits) {
-        return new AppProperties(
-                new AppProperties.Cors(List.of("http://localhost:3000")),
-                new AppProperties.Analysis(4, 30, 30, 30, 60, 0.34, new AppProperties.RateLimit(enabled, permits)),
-                new AppProperties.Ai("stub", List.of(), TestProviders.gemini(), TestProviders.groq()),
-                TestProviders.auth());
+        return TestProviders.properties(TestProviders.analysis(enabled, permits));
     }
 
     @Test

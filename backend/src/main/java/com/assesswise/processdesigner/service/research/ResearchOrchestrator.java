@@ -309,6 +309,10 @@ public class ResearchOrchestrator {
         Set<String> connectorsUsed = new LinkedHashSet<>();
         List<String> notes = new ArrayList<>();
         AtomicInteger totalHits = new AtomicInteger();
+        // Most connectors cost an HTTP request and are called for every query they suit. The
+        // agentic one costs ~15,000 tokens a call and is capped, so its budget goes to the first
+        // queries in the plan, which the planner ordered by usefulness.
+        Map<String, Integer> invocations = new HashMap<>();
 
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int index = 0; index < savedQueries.size(); index++) {
@@ -318,7 +322,20 @@ public class ResearchOrchestrator {
                 List<SearchConnector> applicable = connectors.stream()
                         .filter(SearchConnector::isEnabled)
                         .filter(connector -> connector.supports(spec.intent()))
+                        .filter(connector -> {
+                            int used = invocations.getOrDefault(connector.id(), 0);
+                            if (used < connector.maxInvocationsPerRun()) {
+                                return true;
+                            }
+                            if (used == connector.maxInvocationsPerRun()) {
+                                invocations.put(connector.id(), used + 1);
+                                notes.add("%s was used its maximum of %d time(s) this run and was not asked again"
+                                        .formatted(connector.id(), connector.maxInvocationsPerRun()));
+                            }
+                            return false;
+                        })
                         .toList();
+                applicable.forEach(connector -> invocations.merge(connector.id(), 1, Integer::sum));
 
                 if (applicable.isEmpty()) {
                     notes.add("No connector covers %s queries".formatted(spec.intent()));
