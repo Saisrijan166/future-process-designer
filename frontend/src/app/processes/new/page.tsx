@@ -9,6 +9,7 @@ import {
   FormField,
   INPUT_CLASSES,
   Modal,
+  PAGE_READING,
   Panel,
   SectionHeading,
   Spinner,
@@ -129,7 +130,7 @@ export default function NewProcessPage() {
   const fieldErrors = error?.fieldErrors ?? {};
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className={`${PAGE_READING} space-y-6`}>
       <div>
         <Link href="/" className="inline-flex items-center gap-1 text-sm text-[var(--text-link)] hover:underline">
           <span aria-hidden="true">←</span> All processes

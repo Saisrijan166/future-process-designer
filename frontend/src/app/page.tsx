@@ -1,9 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatTile } from "@/components/charts";
-import { Badge, Button, ButtonLink, EmptyState, ErrorPanel, Panel, Skeleton } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  ButtonLink,
+  EmptyState,
+  ErrorPanel,
+  PAGE_WIDE,
+  Panel,
+  Skeleton,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
@@ -33,6 +43,9 @@ const SORTS: { value: NonNullable<ProcessListQuery["sort"]>; label: string }[] =
 ];
 
 export default function DashboardPage() {
+  // A table by default: eleven processes compared on the same six numbers is a table's job, and
+  // the cards made you scan three columns to answer "which of these has been analysed".
+  const [view, setView] = useState<"table" | "cards">("table");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState<NonNullable<ProcessListQuery["sort"]>>("recent");
   const [search, setSearch] = useState("");
@@ -87,7 +100,7 @@ export default function DashboardPage() {
   }, [anyRunning, reload]);
 
   return (
-    <div className="mx-auto max-w-[84rem] space-y-7">
+    <div className={`${PAGE_WIDE} space-y-7`}>
       <Hero />
 
       {error ? (
@@ -164,21 +177,33 @@ export default function DashboardPage() {
             ))}
           </select>
 
-          <ButtonLink href="/processes/new" variant="primary" size="md" className="ml-auto">
-            New process
-          </ButtonLink>
+          <div className="ml-auto flex items-center gap-2">
+            <ViewSwitch view={view} onChange={setView} />
+            <ButtonLink href="/processes/new" variant="primary" size="md">
+              New process
+            </ButtonLink>
+          </div>
         </div>
 
         {loading && !result ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <Panel key={index} className="space-y-3 p-4">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-3 w-1/3" />
-                <Skeleton className="h-12 w-full" />
-              </Panel>
-            ))}
-          </div>
+          // Shaped like whichever view is about to arrive, so the layout does not jump.
+          view === "table" ? (
+            <Panel className="space-y-2 p-4">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <Skeleton key={index} className="h-8 w-full" />
+              ))}
+            </Panel>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <Panel key={index} className="space-y-3 p-4">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                  <Skeleton className="h-12 w-full" />
+                </Panel>
+              ))}
+            </div>
+          )
         ) : result && result.items.length === 0 ? (
           <EmptyState
             title={debouncedSearch ? "Nothing matched that search" : "No processes yet"}
@@ -188,6 +213,12 @@ export default function DashboardPage() {
                 : "Describe a process as it runs today and the pipeline will research it and design its AI-enabled future state."
             }
             action={<ButtonLink href="/processes/new" variant="primary">Describe a process</ButtonLink>}
+          />
+        ) : view === "table" ? (
+          <ProcessTable
+            processes={result?.items ?? []}
+            sortedBy={sort}
+            onSort={changeSort}
           />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -267,6 +298,195 @@ function Hero() {
         </ul>
       </div>
     </section>
+  );
+}
+
+/**
+ * The listing as a table.
+ *
+ * <p>Eleven processes measured on the same six numbers is what a table is for: the eye runs down a
+ * column instead of hopping between cards, and "which of these has not been analysed" is answered
+ * at a glance rather than by reading. The card view stays available for anyone who prefers it.
+ *
+ * <p>The row is not itself a link — a table row cannot legally contain one — so the name is the
+ * link and the row carries the click for the mouse. Keyboard and screen-reader users get the real
+ * link; nobody gets a row that only works if you can see it.
+ */
+function ProcessTable({
+  processes,
+  sortedBy,
+  onSort,
+}: {
+  processes: ProcessSummary[];
+  sortedBy: NonNullable<ProcessListQuery["sort"]>;
+  onSort: (next: NonNullable<ProcessListQuery["sort"]>) => void;
+}) {
+  const router = useRouter();
+
+  return (
+    <div className="panel overflow-x-auto">
+      <table className="w-full min-w-[52rem] border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-b border-[var(--border-subtle)]">
+            <SortableHeader
+              label="Process"
+              className="pl-4"
+              active={sortedBy === "name"}
+              descending={false}
+              onClick={() => onSort("name")}
+            />
+            <th scope="col" className="eyebrow px-3 py-2.5">
+              Status
+            </th>
+            <th scope="col" className="eyebrow px-3 py-2.5 text-right" title="Activities recorded today">
+              Steps
+            </th>
+            <th scope="col" className="eyebrow px-3 py-2.5 text-right" title="AI opportunities proposed">
+              AI ideas
+            </th>
+            <th scope="col" className="eyebrow px-3 py-2.5 text-right" title="Steps in the redesigned process">
+              Future
+            </th>
+            <SortableHeader
+              label="Added"
+              align="right"
+              active={sortedBy === "recent" || sortedBy === "oldest"}
+              descending={sortedBy === "recent"}
+              // Clicking the column you are already sorted by reverses it, which is what a table
+              // header is expected to do.
+              onClick={() => onSort(sortedBy === "recent" ? "oldest" : "recent")}
+            />
+            <SortableHeader
+              label="Last analysed"
+              align="right"
+              className="pr-4"
+              active={sortedBy === "analysed"}
+              descending
+              onClick={() => onSort("analysed")}
+            />
+          </tr>
+        </thead>
+        <tbody>
+          {processes.map((process) => {
+            const analysed = process.status === "ANALYZED";
+            return (
+              <tr
+                key={process.id}
+                onClick={() => router.push(`/processes/${process.id}`)}
+                className="cursor-pointer border-b border-[var(--border-subtle)] transition-colors last:border-0 hover:bg-[var(--surface-3)]"
+              >
+                <td className="max-w-[22rem] py-2.5 pl-4 pr-3">
+                  <Link
+                    href={`/processes/${process.id}`}
+                    className="block truncate font-medium text-[var(--text-primary)] hover:text-[var(--text-link)]"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {process.name}
+                  </Link>
+                  <span className="mt-0.5 block truncate text-[0.6875rem] text-[var(--text-muted)]">
+                    {process.industry}
+                    {process.shared ? " · shared sample" : ""}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5">
+                  {process.analysisRunning ? (
+                    <Badge tone="brand">Analysing…</Badge>
+                  ) : (
+                    <Badge tone={analysed ? "good" : "neutral"}>{analysed ? "Analysed" : "Not run"}</Badge>
+                  )}
+                </td>
+                <td className="tabular px-3 py-2.5 text-right text-[var(--text-secondary)]">
+                  {process.activityCount}
+                </td>
+                <td className="tabular px-3 py-2.5 text-right text-[var(--text-secondary)]">
+                  {process.opportunityCount || "—"}
+                </td>
+                <td className="tabular px-3 py-2.5 text-right text-[var(--text-secondary)]">
+                  {process.futureActivityCount || "—"}
+                </td>
+                <td className="tabular px-3 py-2.5 text-right text-[0.6875rem] whitespace-nowrap text-[var(--text-muted)]">
+                  {formatDate(process.createdAt)}
+                </td>
+                <td className="tabular py-2.5 pr-4 pl-3 text-right text-[0.6875rem] whitespace-nowrap text-[var(--text-muted)]">
+                  {process.lastAnalyzedAt ? formatDate(process.lastAnalyzedAt) : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SortableHeader({
+  label,
+  active,
+  descending,
+  onClick,
+  align = "left",
+  className = "",
+}: {
+  label: string;
+  active: boolean;
+  /** Which way the sort actually runs, so the arrow and aria-sort agree with the rows. */
+  descending: boolean;
+  onClick: () => void;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <th
+      scope="col"
+      // aria-sort belongs to the header cell, not to the button inside it.
+      aria-sort={active ? (descending ? "descending" : "ascending") : "none"}
+      className={`px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className={`eyebrow inline-flex items-center gap-1 hover:text-[var(--text-secondary)] ${
+          active ? "text-[var(--text-primary)]" : ""
+        }`}
+      >
+        {label}
+        <span aria-hidden="true" className={active ? "" : "opacity-0"}>
+          {descending ? "↓" : "↑"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+function ViewSwitch({
+  view,
+  onChange,
+}: {
+  view: "table" | "cards";
+  onChange: (next: "table" | "cards") => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Listing layout"
+      className="flex rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] p-0.5"
+    >
+      {(["table", "cards"] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(option)}
+          aria-pressed={view === option}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+            view === option
+              ? "bg-[var(--surface-inverse)] text-[var(--text-inverse)]"
+              : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+          }`}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
   );
 }
 

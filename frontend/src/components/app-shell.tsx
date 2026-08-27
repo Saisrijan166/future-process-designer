@@ -29,6 +29,14 @@ interface NavItem {
   label: string;
   icon: ReactNode;
   description: string;
+  /**
+   * Extra path prefixes this item owns.
+   *
+   * <p>"Processes" lives at "/" — and "/" cannot be matched by prefix, or it would light up on
+   * every page. So the pages that belong to it are named: without this, opening a process or the
+   * create form left nothing highlighted at all, and the sidebar stopped saying where you were.
+   */
+  owns?: string[];
 }
 
 const NAV: NavItem[] = [
@@ -36,6 +44,7 @@ const NAV: NavItem[] = [
     href: "/",
     label: "Processes",
     description: "Everything you can analyse",
+    owns: ["/processes"],
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <rect x="2" y="2.5" width="5" height="5" rx="1.2" stroke="currentColor" strokeWidth="1.4" />
@@ -104,7 +113,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const isActive = (item: NavItem) =>
+    item.href === "/"
+      ? pathname === "/" || (item.owns ?? []).some((prefix) => pathname.startsWith(prefix))
+      : pathname.startsWith(item.href);
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">
@@ -197,7 +209,7 @@ function SidebarContent({
   onOpenPalette,
   onNavigate,
 }: {
-  isActive: (href: string) => boolean;
+  isActive: (item: NavItem) => boolean;
   user: string | null;
   onSignOut: () => void;
   onOpenPalette: () => void;
@@ -244,7 +256,7 @@ function SidebarContent({
 
       <nav className="mt-4 flex-1 space-y-0.5 px-3">
         {NAV.map((item) => {
-          const active = isActive(item.href);
+          const active = isActive(item);
           return (
             <Link
               key={item.href}

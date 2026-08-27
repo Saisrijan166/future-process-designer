@@ -22,11 +22,13 @@ import {
   Button,
   ButtonLink,
   ErrorPanel,
+  PAGE_READING,
+  PAGE_WIDE,
   Panel,
   Skeleton,
   Tabs,
-  useToast,
   type TabDefinition,
+  useToast,
 } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -167,7 +169,7 @@ export default function ProcessPage() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-3xl py-8">
+      <div className={`${PAGE_READING} py-8`}>
         <ErrorPanel
           title={error.status === 404 ? "Process not found" : "Could not load this process"}
           message={error.message}
@@ -182,7 +184,7 @@ export default function ProcessPage() {
 
   if (loading || !detail) {
     return (
-      <div className="mx-auto max-w-[84rem] space-y-4">
+      <div className={`${PAGE_WIDE} space-y-4`}>
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="h-4 w-2/3" />
         <div className="grid gap-3 sm:grid-cols-4">
@@ -198,7 +200,7 @@ export default function ProcessPage() {
   const analysed = detail.process.status === "ANALYZED";
 
   return (
-    <div className="mx-auto max-w-[84rem] space-y-5">
+    <div className={`${PAGE_WIDE} space-y-5`}>
       <header className="space-y-3">
         <nav className="no-print flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
           <Link href="/" className="hover:text-[var(--text-primary)]">

@@ -147,6 +147,21 @@ export function SectionHeading({
 // Badges
 // ---------------------------------------------------------------------------
 
+/**
+ * The two page widths.
+ *
+ * <p>Named because they were previously decided page by page, and had drifted to five different
+ * values across seven pages — so the same application felt like two, and the wider pages made the
+ * narrower ones look broken.
+ *
+ * <p>{@link PAGE_WIDE} is for pages made of data: tables, grids, charts, side-by-side comparison.
+ * {@link PAGE_READING} is for prose and forms, where a 1,344px measure is worse than a narrow one,
+ * not better. A wide page still constrains its own paragraphs — width for the data, a readable line
+ * length for the words.
+ */
+export const PAGE_WIDE = "mx-auto w-full max-w-[84rem]";
+export const PAGE_READING = "mx-auto w-full max-w-4xl";
+
 export type Tone = "neutral" | "brand" | "good" | "warning" | "serious" | "critical" | "info";
 
 const TONE_STYLES: Record<Tone, string> = {

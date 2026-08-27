@@ -1,6 +1,12 @@
 "use client";
 
-import { Badge, ButtonLink, Panel, SectionHeading } from "@/components/ui";
+import {
+  Badge,
+  ButtonLink,
+  PAGE_READING,
+  Panel,
+  SectionHeading,
+} from "@/components/ui";
 
 /**
  * What the pipeline actually does, stage by stage.
@@ -99,7 +105,7 @@ const GUARANTEES = [
 
 export default function HowItWorksPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-7">
+    <div className={`${PAGE_READING} space-y-7`}>
       <header>
         <Badge tone="brand">Ten stages · one model call each · every prompt stored</Badge>
         <h1 className="mt-3 text-2xl font-semibold sm:text-3xl">How an analysis is produced</h1>

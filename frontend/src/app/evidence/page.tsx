@@ -3,7 +3,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { DistributionStrip, StatTile } from "@/components/charts";
 import { SOURCE_TYPE_COLOURS, SOURCE_TYPE_LABELS } from "@/components/evidence";
-import { Badge, EmptyState, ErrorPanel, Panel, SectionHeading, Skeleton } from "@/components/ui";
+import {
+  Badge,
+  EmptyState,
+  ErrorPanel,
+  PAGE_WIDE,
+  Panel,
+  SectionHeading,
+  Skeleton,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
@@ -40,7 +48,7 @@ export default function EvidencePage() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className={`${PAGE_WIDE} space-y-6`}>
       <header>
         <h1 className="text-xl font-semibold sm:text-2xl">Curated corpus</h1>
         <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-[var(--text-secondary)]">
@@ -92,7 +100,11 @@ export default function EvidencePage() {
             ))}
           </div>
 
-          <ul className="space-y-2.5">
+          {/*
+            Two columns once there is room for them. A quote set in a single 1,344px column is
+            eighty words to a line and unreadable; two columns use the width and keep the measure.
+          */}
+          <ul className="grid gap-2.5 xl:grid-cols-2">
             {visible.map((snippet) => (
               <li key={snippet.id}>
                 <SnippetCard snippet={snippet} />
