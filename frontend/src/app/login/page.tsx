@@ -1,9 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Button, ErrorPanel, FormField, INPUT_CLASSES, Panel } from "@/components/ui";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { Button, ErrorPanel, FormField, INPUT_CLASSES, Panel, Spinner } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+
+/**
+ * Where to go once there is a session.
+ *
+ * <p>Only a same-site absolute path is accepted. `//evil.example` is a protocol-relative URL that
+ * a browser treats as another origin, so the second character has to be checked as well as the
+ * first — this is the shape of every open-redirect bug.
+ */
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
 
 /**
  * Sign in, or create an account.
@@ -14,7 +27,26 @@ import { useAuth } from "@/lib/auth-context";
  * on a free-tier database.
  */
 export default function LoginPage() {
-  const { signIn, signUp } = useAuth();
+  // useSearchParams needs a boundary above it, or this route cannot be prerendered at all.
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginFallback() {
+  return (
+    <div className="flex min-h-[70vh] items-center justify-center">
+      <Spinner className="size-5 text-[var(--text-muted)]" />
+    </div>
+  );
+}
+
+function LoginForm() {
+  const { signIn, signUp, user } = useAuth();
+  const router = useRouter();
+  const next = safeNext(useSearchParams().get("next"));
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,6 +55,13 @@ export default function LoginPage() {
   const [error, setError] = useState<ApiError | null>(null);
 
   const fieldErrors = error?.fieldErrors ?? {};
+
+  // Covers both halves of the same problem: the moment a sign-in succeeds, and someone arriving
+  // here who already has a session. Before this, a successful sign-in left you looking at the form
+  // you had just filled in, with no indication anything had happened.
+  useEffect(() => {
+    if (user) router.replace(next);
+  }, [user, next, router]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -34,9 +73,11 @@ export default function LoginPage() {
       } else {
         await signUp(email.trim(), password, displayName.trim() || undefined);
       }
+      // Navigation is left to the effect above, which fires once the session is really in place.
+      // Keeping the button in its loading state until the new page paints stops a second submit.
+      return;
     } catch (caught) {
       setError(caught as ApiError);
-    } finally {
       setSubmitting(false);
     }
   }

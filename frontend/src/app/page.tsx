@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatTile } from "@/components/charts";
 import { Badge, Button, ButtonLink, EmptyState, ErrorPanel, Panel, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
 import type { ProcessListQuery, ProcessStatus, ProcessSummary } from "@/lib/types";
 
@@ -23,9 +23,11 @@ const FILTER_STATUS: Record<string, ProcessStatus | undefined> = {
   pending: "CURRENT_ONLY",
 };
 
+// The labels name the field, not just the direction. "Newest first" next to a card whose only
+// visible date was the analysis date made a correctly-sorted list look unsorted.
 const SORTS: { value: NonNullable<ProcessListQuery["sort"]>; label: string }[] = [
-  { value: "recent", label: "Newest first" },
-  { value: "oldest", label: "Oldest first" },
+  { value: "recent", label: "Recently added" },
+  { value: "oldest", label: "Added — oldest" },
   { value: "name", label: "Name A–Z" },
   { value: "analysed", label: "Recently analysed" },
 ];
@@ -180,7 +182,7 @@ export default function DashboardPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {result?.items.map((process) => (
-              <ProcessCard key={process.id} process={process} />
+              <ProcessCard key={process.id} process={process} sortedBy={sort} />
             ))}
           </div>
         )}
@@ -258,7 +260,14 @@ function Hero() {
   );
 }
 
-function ProcessCard({ process }: { process: ProcessSummary }) {
+function ProcessCard({
+  process,
+  sortedBy,
+}: {
+  process: ProcessSummary;
+  /** Which date the list is ordered by, so the card shows that one first. */
+  sortedBy: NonNullable<ProcessListQuery["sort"]>;
+}) {
   const analysed = process.status === "ANALYZED";
   const summary = useMemo(
     () =>
@@ -302,9 +311,12 @@ function ProcessCard({ process }: { process: ProcessSummary }) {
 
       <p className="mt-2.5 text-[0.6875rem] text-[var(--text-muted)]">
         {process.shared ? "Shared sample · " : ""}
-        {analysed && process.lastAnalyzedAt
+        {sortedBy === "analysed" && process.lastAnalyzedAt
           ? `Analysed ${formatDateTime(process.lastAnalyzedAt)}`
-          : `Added ${formatDateTime(process.createdAt)}`}
+          : `Added ${formatDate(process.createdAt)}`}
+        {sortedBy !== "analysed" && analysed && process.lastAnalyzedAt
+          ? ` · analysed ${formatDate(process.lastAnalyzedAt)}`
+          : ""}
       </p>
     </Link>
   );

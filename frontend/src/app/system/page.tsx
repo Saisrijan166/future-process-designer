@@ -140,7 +140,16 @@ export default function SystemPage() {
                         </span>
                       </td>
                       <td className="tabular py-2 text-right text-[var(--text-secondary)]">
-                        {Math.round(budget.remainingRequests).toLocaleString("en-IN")}
+                        {/*
+                          Only the token ceiling is shared organisation-wide; the daily request
+                          allowance really is per model. The shared row carried a placeholder
+                          number, which read as a measured limit it is not.
+                        */}
+                        {shared ? (
+                          <span className="text-[var(--text-muted)]">counted per model</span>
+                        ) : (
+                          Math.round(budget.remainingRequests).toLocaleString("en-IN")
+                        )}
                       </td>
                       <td className="tabular py-2 text-right text-[var(--text-secondary)]">
                         {budget.admitted}

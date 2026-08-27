@@ -168,6 +168,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The palette answers both Cmd+K and Ctrl+K; the hint has to say which one *this* keyboard uses.
+ *
+ * <p>The platform is an external fact, not React state, and reading it during render would make the
+ * server and the browser disagree. Read through a store instead: the server renders the Ctrl form
+ * and the browser corrects it at hydration, which is a supported outcome rather than a mismatch.
+ */
+const noopSubscribe = () => () => {};
+
+function isApplePlatform(): boolean {
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform ??
+    "";
+  return /mac|iphone|ipad|ipod/i.test(platform);
+}
+
+function PaletteShortcut() {
+  const apple = useSyncExternalStore(noopSubscribe, isApplePlatform, () => false);
+  return <>{apple ? "⌘K" : "Ctrl K"}</>;
+}
+
 function SidebarContent({
   isActive,
   user,
@@ -215,7 +237,7 @@ function SidebarContent({
           </svg>
           Search processes
           <kbd className="mono ml-auto rounded border border-[var(--border-subtle)] px-1 py-px text-[0.625rem]">
-            ⌘K
+            <PaletteShortcut />
           </kbd>
         </button>
       </div>

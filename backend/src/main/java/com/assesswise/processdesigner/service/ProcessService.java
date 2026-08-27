@@ -107,7 +107,9 @@ public class ProcessService {
             "recent", Sort.by(Sort.Direction.DESC, "createdAt"),
             "oldest", Sort.by(Sort.Direction.ASC, "createdAt"),
             "name", Sort.by(Sort.Direction.ASC, "name"),
-            "analysed", Sort.by(Sort.Direction.DESC, "lastAnalyzedAt"));
+            // NULLS LAST matters: PostgreSQL puts nulls first on a DESC sort, so "recently
+            // analysed" opened with every process that has never been analysed at all.
+            "analysed", Sort.by(Sort.Order.desc("lastAnalyzedAt").nullsLast()));
 
     private static final int MAX_PAGE_SIZE = 100;
 

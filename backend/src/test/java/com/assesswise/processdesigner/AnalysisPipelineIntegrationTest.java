@@ -11,6 +11,8 @@ import com.assesswise.processdesigner.dto.AnalysisResultDto;
 import com.assesswise.processdesigner.dto.ComparisonDto;
 import com.assesswise.processdesigner.dto.CreateProcessRequest;
 import com.assesswise.processdesigner.dto.ProcessDetailDto;
+import com.assesswise.processdesigner.dto.ProcessPageDto;
+import com.assesswise.processdesigner.dto.ProcessSummaryDto;
 import com.assesswise.processdesigner.exception.AiProviderException;
 import com.assesswise.processdesigner.support.AbstractIntegrationTest;
 import com.assesswise.processdesigner.support.AuthenticatedClient;
@@ -209,6 +211,26 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
                 .filteredOn(intervention -> intervention.interventionType().name().equals("AUTOMATE"))
                 .singleElement()
                 .satisfies(intervention -> assertThat(intervention.relatedAiOpportunityId()).isNotNull());
+    }
+
+    @Test
+    @DisplayName("the listing sorted by most recently analysed puts the never-analysed ones last")
+    void sortsByAnalysedWithNullsLast() {
+        // A process that has never been analysed has no date at all, and PostgreSQL sorts nulls
+        // first on a DESC sort — so this listing used to open with everything that had never run.
+        aiProvider.respondWith(validModelResponse());
+        UUID analysed = createProcess("Sorted Analysed " + UUID.randomUUID());
+        createProcess("Sorted Never Analysed " + UUID.randomUUID());
+        assertThat(analyze(analysed).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        List<ProcessSummaryDto> items = client
+                .getBody("/api/processes?sort=analysed&size=100", ProcessPageDto.class)
+                .items();
+
+        assertThat(items.get(0).id()).as("the analysed process should lead").isEqualTo(analysed);
+        assertThat(items.stream().map(ProcessSummaryDto::lastAnalyzedAt).toList())
+                .as("every process with a date comes before every process without one")
+                .containsSubsequence(items.get(0).lastAnalyzedAt(), null);
     }
 
     @Test

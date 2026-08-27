@@ -118,8 +118,9 @@ export default function ProcessPage() {
       { id: "impact", label: "Impact", count: detail.impacts.length },
       { id: "risks", label: "Risks", count: detail.risks.length },
       { id: "roadmap", label: "Roadmap", count: detail.roadmap.length },
-      { id: "evidence", label: "Evidence", count: detail.research?.claimCount ?? null },
-      { id: "trace", label: "Run trace", count: detail.latestRun?.stageCount || null },
+      // 0 rather than null, so an un-analysed process reads the same way across every tab.
+      { id: "evidence", label: "Evidence", count: detail.research?.claimCount ?? 0 },
+      { id: "trace", label: "Run trace", count: detail.latestRun?.stageCount ?? 0 },
     ];
   }, [detail]);
 

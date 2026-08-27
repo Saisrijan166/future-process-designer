@@ -240,7 +240,7 @@ export default function NewProcessPage() {
               <li key={activity.key} className="rise-in rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-1)] p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-[var(--text-muted)] uppercase">
-                    <span className="grid size-5 place-items-center rounded-full bg-ink-200 text-[11px] text-[var(--text-secondary)]">
+                    <span className="grid size-5 place-items-center rounded-full bg-[var(--surface-inset)] text-[11px] text-[var(--text-secondary)]">
                       {index + 1}
                     </span>
                     Step {index + 1}
@@ -377,7 +377,7 @@ function ExampleBar({
     <Panel className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
       {loaded ? (
         <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-900 px-2.5 py-1 text-xs font-medium text-white">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-inverse)] px-2.5 py-1 text-xs font-medium text-[var(--text-inverse)]">
             <svg className="size-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
                 d="M3.5 8.5l3 3 6-7"
@@ -455,7 +455,7 @@ function ExampleDialog({
                 aria-pressed={active}
                 className={`flex h-full w-full flex-col rounded-xl border p-3 text-left transition-colors ${
                   active
-                    ? "border-ink-900 bg-ink-900 text-white"
+                    ? "border-[var(--surface-inverse)] bg-[var(--surface-inverse)] text-[var(--text-inverse)]"
                     : "border-[var(--border-subtle)] bg-[var(--surface-2)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-1)]"
                 }`}
               >
@@ -473,16 +473,16 @@ function ExampleDialog({
                     </svg>
                   ) : null}
                 </span>
-                <span className={`mt-0.5 text-xs ${active ? "text-ink-300" : "text-[var(--text-muted)]"}`}>
+                <span className={`mt-0.5 text-xs ${active ? "text-[var(--text-inverse-muted)]" : "text-[var(--text-muted)]"}`}>
                   {example.industry}
                 </span>
                 <span
-                  className={`mt-1.5 text-xs leading-relaxed ${active ? "text-ink-200" : "text-[var(--text-secondary)]"}`}
+                  className={`mt-1.5 text-xs leading-relaxed ${active ? "text-[var(--text-inverse-muted)]" : "text-[var(--text-secondary)]"}`}
                 >
                   {example.teaser}
                 </span>
                 <span
-                  className={`mt-2 text-[11px] font-medium ${active ? "text-ink-300" : "text-[var(--text-muted)]"}`}
+                  className={`mt-2 text-[11px] font-medium ${active ? "text-[var(--text-inverse-muted)]" : "text-[var(--text-muted)]"}`}
                 >
                   {example.activities.length} steps
                 </span>

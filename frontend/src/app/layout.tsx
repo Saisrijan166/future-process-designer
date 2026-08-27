@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { AppShell } from "@/components/app-shell";
-import { RequireAuth } from "@/components/require-auth";
+import { AuthGate } from "@/components/auth-gate";
 import { EvidenceProvider } from "@/components/evidence";
 import { ToastProvider } from "@/components/ui";
 import { AuthProvider } from "@/lib/auth-context";
@@ -40,9 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ToastProvider>
             <EvidenceProvider>
-              <AppShell>
-                <RequireAuth>{children}</RequireAuth>
-              </AppShell>
+              <AuthGate>{children}</AuthGate>
             </EvidenceProvider>
           </ToastProvider>
         </AuthProvider>

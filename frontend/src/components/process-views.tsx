@@ -125,8 +125,8 @@ export function OverviewPanel({
   if (detail.process.status !== "ANALYZED") {
     return (
       <EmptyState
-        title="This process has not been analysed yet"
-        message="Run the analysis to research the domain live, propose grounded interventions, design the future state and score the result. It takes a few minutes and you can watch it happen."
+        title="Nothing to summarise yet"
+        message="This view is the scorecard, the counts and the headline saving. It fills in once the analysis has run."
       />
     );
   }
@@ -1145,11 +1145,20 @@ export function EvidencePanel({
   }
 
   if (!research) {
+    // Three different situations reached this branch with the same sentence, one of which claimed
+    // an analysis had run when none had, and pointed at a corpus that was not on the page.
+    const analysed = detail.process.status === "ANALYZED";
     return (
       <div className="space-y-4">
         <EmptyState
-          title="No live research recorded"
-          message="This analysis ran without the live research layer, or predates it. The curated corpus below is what grounded it instead."
+          title={analysed ? "No live research recorded" : "No evidence gathered yet"}
+          message={
+            !analysed
+              ? "Evidence is gathered while the analysis runs: the searches it planned, the pages it read, and every quote checked against the page it came from."
+              : detail.evidence.length > 0
+                ? "This analysis ran without the live research layer, or predates it. The curated corpus below is what grounded it instead."
+                : "This analysis ran without the live research layer, or predates it, and no curated sources were recorded against it either."
+          }
         />
         {detail.evidence.length > 0 ? (
           <Panel className="p-4">
