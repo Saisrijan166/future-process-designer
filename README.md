@@ -46,10 +46,10 @@ and every response is readable in the running application.
 | Required | Where it is |
 |---|---|
 | **README / setup instructions** | This file — [Run it locally](#run-it-locally) for a from-scratch local run, [DEPLOYMENT.md](DEPLOYMENT.md) for the hosted one |
-| **Architecture documentation** | [docs/architecture-diagram.md](docs/architecture-diagram.md) — the four layers, the eight-step analysis pipeline, and the request path end to end. Exported as PNG in [docs/diagrams/](docs/diagrams/) |
-| **AI architecture** | [docs/ai-architecture.md](docs/ai-architecture.md) — the knowledge, prompt, reasoning and guardrail layers, and which decisions belong to software rather than the model |
+| **Architecture documentation** | [docs/architecture-diagram.md](docs/architecture-diagram.md) — the layers, the ten-stage analysis pipeline, and the request path end to end. Exported as PNG in [docs/diagrams/](docs/diagrams/) |
+| **AI architecture** | [docs/ai-architecture.md](docs/ai-architecture.md) — the eight layers of the intelligence stack, from live research through quote verification to the guardrails, and which decisions belong to software rather than the model |
 | **Technical documentation** | [docs/technical-documentation.md](docs/technical-documentation.md) — module map, full API reference, pipeline internals, security model, every configuration variable, testing and operations. [docs/](docs/) indexes everything |
-| **Database documentation** | [docs/data-model.md](docs/data-model.md) — every table and column, the current/transition/future split, and the SQL that walks a future step back to its evidence. ER diagram as PNG in [docs/diagrams/](docs/diagrams/) |
+| **Database documentation** | [docs/data-model.md](docs/data-model.md) — every table and column, the current/transition/future/evidence/audit split, and the SQL that walks a future step back to the verified quote behind it. ER diagram as PNG in [docs/diagrams/](docs/diagrams/) |
 | **AI tools / model disclosure** | [docs/ai-tools-disclosure.md](docs/ai-tools-disclosure.md) — how this was built with AI assistance, what was generated, what was corrected, and what the assistant got wrong |
 | **Library disclosure** | [LIBRARIES.md](LIBRARIES.md) — every dependency, its licence, and why it is there |
 | **Sample data** | [V2__seed_data.sql](backend/src/main/resources/db/migration/V2__seed_data.sql) — 6 processes, 32 activities, 18 problems, 16 roles, 13 systems. Applied by Flyway at first start, so there is no manual load step. [data-seed.sql](data-seed.sql) documents the contents and how to run it by hand |

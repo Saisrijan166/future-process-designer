@@ -11,9 +11,8 @@
 | Tool | Model | What it was used for |
 |---|---|---|
 | **Claude Code** (Anthropic) | Claude Opus 4.5 | Writing the implementation: Java source, SQL migrations, React/TypeScript components, tests, configuration and this documentation |
-| **Google Gemini** | `gemini-3.1-flash-lite` | Not a build tool — it is the AI capability *inside* the shipped product, called at runtime by the analysis pipeline |
-
-| **Groq** | `llama-3.3-70b-versatile` | Also part of the product, not the build: the fallback AI service used when Gemini is unavailable |
+| **Groq Cloud** | `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`, `groq/compound` | Not a build tool — these are the AI capability *inside* the shipped product, called at runtime by the ten pipeline stages and by the agentic research connector |
+| **Google AI Studio** | `gemini-3.1-flash-lite` | Also part of the product, not the build: the second provider, used for the stages routed to it and when Groq's per-minute budget is exhausted |
 
 No other code-generation tool was used. No code was copied from an existing project of mine or from
 a public repository; the application was built from scratch during this effort, on top of the
@@ -25,12 +24,20 @@ Effectively all of the source in this repository was written by Claude Code, wor
 plan in `AI_FUTURE_PROCESS_DESIGNER_BUILD_PLAN.md`:
 
 - The Flyway migrations, the JPA entity model and the repository layer.
-- The analysis pipeline: knowledge retrieval, the prompt template renderer, the Gemini provider,
-  the response parser, the payload validator, the persistence stage and the run recorder.
-- The REST controllers, DTOs, the RFC 7807 error handling and the configuration properties.
-- The prompt templates in `backend/src/main/resources/prompts/`.
-- The Next.js frontend in its entirety.
-- The 129 tests, including the integration suite that runs against a real PostgreSQL.
+- The ten-stage analysis pipeline, the model gateway (per-task router, response cache, token budget
+  governor), and the provider implementations behind one interface.
+- The research layer: eleven keyless connectors, the fetcher and its `robots.txt` policy, the
+  content and claim extractors, the quote verifier, the credibility scorer and the corroboration
+  analyser.
+- The deterministic components the model is deliberately kept out of: the impact calculator and the
+  scorecard.
+- The REST controllers, the SSE progress stream, DTOs, the RFC 7807 error handling and the
+  configuration properties.
+- The nine prompt templates in `backend/src/main/resources/prompts/`.
+- The Next.js frontend in its entirety, including the design tokens, the SVG chart components and
+  the live analysis console.
+- The 165 tests, including the integration suite that runs against a real PostgreSQL and the live
+  research smoke test.
 - The Dockerfile, Render blueprint, CI workflow, and the documents in `docs/`.
 
 The AssessWise sample data — six processes, their activities, roles, systems and recorded pain
@@ -53,16 +60,32 @@ These are recorded because they are the honest texture of building this way:
 - **A stemmer that didn't collide the forms it needed to.** "grading" and "grade" produced different
   tokens, so keyword retrieval missed obvious matches. Found by a unit test written to assert the
   property rather than the implementation.
-- **Three dead ends before a working model id.** The build plan specified `gemini-1.5-flash`, which
+- **Four dead ends before a working model id.** The build plan specified `gemini-1.5-flash`, which
   is retired. The replacement chosen from knowledge of the API, `gemini-2.5-flash`, is still listed
   by the models endpoint but rejects newly-issued keys outright. `gemini-3.7-flash` worked but
-  allows only ~20 requests a day, which ran out during testing. The deployed default is
-  `gemini-3.1-flash-lite` with thinking disabled — a larger free allowance, and an analysis that
-  takes 8 seconds instead of 27. Each of those was established by making a real call, not by
-  assuming; the model id is configuration rather than a constant precisely because this keeps
-  happening.
-- **Source URLs were verified, not assumed.** Every one of the 16 research URLs was fetched and
-  checked to return HTTP 200 before being written into the seed data. Several plausible-looking
+  allows only ~20 requests a day, which ran out during testing. Then on the Groq side the same
+  lesson arrived again: `llama-3.3-70b-versatile`, this project's own previous default, has been
+  decommissioned. Each of those was established by making a real call, not by assuming; every model
+  id is configuration rather than a constant precisely because this keeps happening, and the router
+  falls back through a chain so a stale route degrades a run instead of ending it.
+- **The rate limit was not what the documentation implied.** Per-task routing was built on the
+  assumption that different Groq models have separate per-minute token budgets. A call to
+  `groq/compound-mini` was then refused with *"Rate limit reached for model
+  openai/gpt-oss-120b"* — the tokens-per-minute ceiling is shared organisation-wide. The budget
+  governor was rewritten around a shared bucket, and the claims in the router's documentation, the
+  README and `LIBRARIES.md` that said routing multiplies throughput were corrected rather than left
+  standing.
+- **A silent schema bug that made eight of ten stages answer the wrong question.** The Gemini
+  provider defaulted to the legacy single-call response schema when the caller supplied none, so
+  every staged prompt was being forced into a shape it was not written for. It produced valid JSON,
+  which is why it survived so long. Found by reading the stored stage responses; fixed so only a
+  caller-supplied schema is ever sent, with three regression tests.
+- **Two HTTP-level failures that looked like the source being unavailable.** Europe PMC returned
+  status 0 through the JDK client until HTTP/1.1 was pinned, and arXiv returned nothing until its
+  query was narrowed as an exact phrase. Both were only findable by calling the real services, which
+  is why `LiveResearchSmokeTest` exists and is not mocked.
+- **Source URLs were verified, not assumed.** Every one of the 16 curated fallback URLs was fetched
+  and checked to return HTTP 200 before being written into the seed data. Several plausible-looking
   candidates were discarded because they 404'd or blocked access.
 
 ## What I decided and reviewed
@@ -73,9 +96,22 @@ and mine to defend.
 - **The domain and scope.** Online education and digital assessment, six seed processes, one
   pipeline. Chosen so that I can tell whether the generated output is actually sensible for the
   domain, rather than merely plausible-sounding.
-- **Curated research instead of live web search.** A deliberate trade-off: reproducible and
-  auditable, at the cost of a small static corpus. The reasoning and the limitations are written
-  down in [`sources.md`](sources.md) rather than glossed over.
+- **Live research, with reproducibility bought back rather than given up.** Live search is the
+  honest answer to "where does the knowledge come from", but a rate-limited API can fail in front of
+  an audience and its results are not auditable afterwards. So: eleven connectors, none of which
+  needs a key, so there is no credential to expire and no single publisher whose refusal ends a run;
+  every fetched page stored with its hash, so a citation can be re-checked months later; and the
+  curated corpus kept as the fallback for when everything blocks. The reasoning and the limitations
+  are in [`sources.md`](sources.md) rather than glossed over.
+- **Quotes are verified by string matching, not taken on the model's word.** This was mine to insist
+  on. A model asked for a verbatim quote will occasionally return a convincing paraphrase, and a
+  paraphrase presented as a quotation is the worst thing this system could emit. Unverified claims
+  are kept and labelled, and excluded from every score.
+- **The scorecard is allowed to score badly.** A quality measure that always reports success
+  measures nothing. All six components are ratios over stored rows.
+- **Arithmetic stays out of the model.** The quantification stage supplies volume, minutes, share
+  and cost — the things judgement is needed for — and Java multiplies them. Every rupee figure in
+  the UI can be recomputed from its stored inputs.
 - **Failover, added after the risk stopped being hypothetical.** The original decision was one
   provider and no failover, since the brief asks for the "what if it stops being free" risk to be
   *explained*. Then Gemini's free tier ran out at twenty requests during testing — which would have
@@ -96,15 +132,26 @@ and mine to defend.
 The repository is the evidence. Every claim above is checkable:
 
 ```bash
-cd backend && ./mvnw verify     # 129 tests, real PostgreSQL, real migrations
+cd backend && ./mvnw verify     # 165 tests, real PostgreSQL, real migrations
 git log --oneline               # the build history
+
+# The research layer against the real internet, skipped by default:
+RESEARCH_LIVE_TESTS=true GROQ_API_KEY=... ./mvnw test -Dtest=LiveResearchSmokeTest
 ```
 
 And at runtime, the prompt and raw model response for any analysis are one click away in the UI, or
 one query away in the database:
 
 ```sql
-SELECT provider, model, provider_notes, repair_attempted,
-       prompt_tokens, output_tokens, duration_ms, prompt_text, raw_response
+-- What the last run cost and what it warned about.
+SELECT pipeline_version, provider, model, stage_count, cache_hit_count,
+       total_prompt_tokens, total_output_tokens, throttled_ms, duration_ms,
+       validation_warnings, provider_notes
 FROM analysis_run ORDER BY started_at DESC LIMIT 1;
+
+-- The exact prompt and the exact response, for every stage of it.
+SELECT stage_id, status, model, prompt_text, raw_response
+FROM analysis_stage
+WHERE analysis_run_id = (SELECT id FROM analysis_run ORDER BY started_at DESC LIMIT 1)
+ORDER BY display_order;
 ```

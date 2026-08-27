@@ -5,12 +5,12 @@ wherever matches what you need.
 
 | Document | What it covers |
 |---|---|
-| **[Architecture](architecture-diagram.md)** | The four layers, the eight-step analysis pipeline as a sequence diagram, the deployment topology, and why each boundary is where it is |
-| **[Data model](data-model.md)** | The ER diagram, every table and column, the current/transition/future split, and the SQL that walks a future step back to the evidence that produced it |
-| **[AI architecture](ai-architecture.md)** | Where the knowledge comes from, where the model sits, the guardrails on either side, and which decisions are software's rather than the model's |
-| **[Technical documentation](technical-documentation.md)** | The full reference — module map, API reference, pipeline internals, security model, every configuration variable, testing, operations and troubleshooting |
-| [Research sources](sources.md) | The 16 curated excerpts that ground every analysis, each with a verified URL, and the corpus's honest limitations |
-| [Demo script](demo-script.md) | A 10–15 minute walkthrough of the whole system, including the surprise-record test |
+| **[Architecture](architecture-diagram.md)** | The layers, the ten-stage pipeline as a sequence diagram, the deployment topology, and why each boundary is where it is |
+| **[AI architecture](ai-architecture.md)** | The eight layers of the intelligence stack: where knowledge is gathered, where trust is earned or refused, where the model sits, and which decisions are deliberately software's rather than the model's |
+| **[Data model](data-model.md)** | The ER diagram, every table and column, the current/transition/future/evidence/audit split, and the SQL that walks a future step back to the verified quote that produced it |
+| **[Technical documentation](technical-documentation.md)** | The full reference — module map, API reference, pipeline and gateway internals, quote verification, security model, every configuration variable, testing, operations and troubleshooting |
+| **[Research sources](sources.md)** | Both layers of the knowledge stack: the eleven live keyless connectors and what each is good for, and the 16 curated excerpts that ground an analysis when they all fail |
+| [Demo script](demo-script.md) | A 12–15 minute walkthrough built around the live research console and the surprise-record test |
 | [AI tools disclosure](ai-tools-disclosure.md) | How AI assistance was used to build this, what it generated, and what it got wrong |
 
 ## Diagrams as images
