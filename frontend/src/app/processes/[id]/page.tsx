@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisConsole } from "@/components/analysis-console";
+import { RunningRunPanel } from "@/components/running-run";
 import {
   CurrentPanel,
   DiagnosisPanel,
@@ -30,7 +31,13 @@ import {
 import { ApiError, api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
-import type { AnalysisResult, AnalysisStage, ProcessDetail, ResearchRun } from "@/lib/types";
+import type {
+  ActiveRun,
+  AnalysisResult,
+  AnalysisStage,
+  ProcessDetail,
+  ResearchRun,
+} from "@/lib/types";
 
 /**
  * One process, as a workspace.
@@ -54,6 +61,8 @@ export default function ProcessPage() {
   const [analysing, setAnalysing] = useState(search.get("analyze") === "1");
   // `null` means "not fetched yet" for both, which is what the loading state is derived from —
   // there is no separate loading flag to keep in step with the data.
+  // A run this page did not start: another tab, a reload, or a colleague on a shared sample.
+  const [activeRun, setActiveRun] = useState<ActiveRun | null>(null);
   const [research, setResearch] = useState<ResearchRun | null>(null);
   const [researchSettled, setResearchSettled] = useState(false);
   const [stages, setStages] = useState<AnalysisStage[] | null>(null);
@@ -61,6 +70,38 @@ export default function ProcessPage() {
 
   const load = useCallback(() => api.getProcess(processId), [processId]);
   const { data: detail, error, loading, reload, replace } = useApiResource(load);
+
+  // Is something already running for this process? Asked once on arrival, because a run outlives
+  // the tab that started it and the page would otherwise look idle while the backend was busy.
+  useEffect(() => {
+    if (!detail || analysing) return;
+    let cancelled = false;
+    api
+      .getActiveRun(processId)
+      .then((run) => {
+        if (!cancelled && run) setActiveRun(run);
+      })
+      .catch(() => {
+        // Not worth telling anyone about: the page is still usable without knowing this.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, analysing, processId]);
+
+  const onRunFinished = useCallback(() => {
+    setActiveRun(null);
+    setResearch(null);
+    setResearchSettled(false);
+    setStages(null);
+    requested.current = { research: false, stages: false };
+    reload();
+    toast.push({
+      tone: "good",
+      title: "Analysis finished",
+      message: "The run that was already going has completed. This page now shows its result.",
+    });
+  }, [reload, toast]);
 
   // The evidence and trace tabs pull their own data, and only when opened. Both are large — every
   // quote, every prompt — and most visits never open them. The in-flight guard is a ref rather than
@@ -234,8 +275,18 @@ export default function ProcessPage() {
                 Delete
               </Button>
             ) : null}
-            <Button variant="primary" size="sm" disabled={analysing} onClick={() => setAnalysing(true)}>
-              {analysed ? "Re-run analysis" : "Run analysis"}
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={analysing || activeRun !== null}
+              onClick={() => setAnalysing(true)}
+              title={
+                activeRun
+                  ? "An analysis of this process is already running — its progress is below."
+                  : undefined
+              }
+            >
+              {activeRun ? "Analysis running…" : analysed ? "Re-run analysis" : "Run analysis"}
             </Button>
           </div>
         </div>
@@ -247,10 +298,25 @@ export default function ProcessPage() {
           processName={detail.process.name}
           onComplete={onAnalysisComplete}
           onClose={() => setAnalysing(false)}
+          onAlreadyRunning={(run) => {
+            // The server refused because a run is already going. Show that run instead of
+            // showing the refusal: it is the answer to "what is running, and where".
+            setAnalysing(false);
+            setActiveRun(run);
+            toast.push({
+              tone: "warning",
+              title: "Already running",
+              message: `An analysis started ${Math.round(run.elapsedMs / 1000)}s ago is still going. Following it instead.`,
+            });
+          }}
         />
       ) : null}
 
-      {!analysed && !analysing ? (
+      {activeRun && !analysing ? (
+        <RunningRunPanel processId={processId} initial={activeRun} onFinished={onRunFinished} />
+      ) : null}
+
+      {!analysed && !analysing && !activeRun ? (
         <Panel className="border-dashed p-4">
           <p className="text-sm text-[var(--text-secondary)]">
             Nothing has been generated for this process yet. Running the analysis searches the live web

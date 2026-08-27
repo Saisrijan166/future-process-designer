@@ -404,6 +404,7 @@ at the cost of output changing between runs.
 | `POST` | `/api/processes/{id}/analyze/stream` | The same run, streaming its progress as Server-Sent Events, then the result |
 | `GET` | `/api/processes/{id}/comparison` | CURRENT / TRANSITION / FUTURE view with roll-up counters |
 | `GET` | `/api/processes/{id}/research` | The live research behind the stored analysis: queries, sources with their credibility arithmetic, and every claim with its checked quote |
+| `GET` | `/api/processes/{id}/analysis-runs/active` | The run happening right now, with its stage progress — `204` when idle |
 | `GET` | `/api/processes/{id}/analysis-runs` | Run history |
 | `GET` | `/api/processes/{id}/analysis-runs/latest/trace` | Every stage, with the exact prompt sent and the exact text returned |
 | `GET` | `/api/processes/{id}/analysis-runs/{runId}/stages` | The same, for a specific run |

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Panel, Spinner, type Tone } from "@/components/ui";
 import { ApiError, streamAnalysis } from "@/lib/api";
-import type { AnalysisResult, ProgressEvent } from "@/lib/types";
+import type { ActiveRun, AnalysisResult, ProgressEvent } from "@/lib/types";
 
 /**
  * The live view of an analysis while it runs.
@@ -72,11 +72,14 @@ export function AnalysisConsole({
   processName,
   onComplete,
   onClose,
+  onAlreadyRunning,
 }: {
   processId: string;
   processName: string;
   onComplete: (result: AnalysisResult) => void;
   onClose: () => void;
+  /** The server refused because a run is already going; here it is, so the page can follow it. */
+  onAlreadyRunning?: (run: ActiveRun) => void;
 }) {
   const [stages, setStages] = useState<StageView[]>(() =>
     STAGE_ORDER.map((id) => ({ id, title: STAGE_TITLES[id], state: "waiting", notes: [] })),
@@ -208,6 +211,12 @@ export function AnalysisConsole({
       })
       .catch((caught) => {
         if (cancelled || controller.signal.aborted) return;
+        // A 409 is not a failure to report — it means a run is already going, and the useful
+        // answer is that run's progress rather than a refusal the reader cannot act on.
+        if (caught instanceof ApiError && caught.status === 409 && caught.problem.activeRun) {
+          onAlreadyRunning?.(caught.problem.activeRun);
+          return;
+        }
         setFinished(true);
         if (caught instanceof ApiError) {
           setError({ message: caught.message, detail: caught.reason });
@@ -220,7 +229,7 @@ export function AnalysisConsole({
       cancelled = true;
       controller.abort();
     };
-  }, [processId, applyEvent, onComplete]);
+  }, [processId, applyEvent, onComplete, onAlreadyRunning]);
 
   useEffect(() => {
     if (finished) return;

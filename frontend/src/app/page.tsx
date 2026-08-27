@@ -75,6 +75,16 @@ export default function DashboardPage() {
   const { data: result, error, loading, reload } = useApiResource(load);
 
   const stats = result?.stats;
+  const anyRunning = (result?.items ?? []).some((item) => item.analysisRunning);
+
+  // While something is being analysed, keep the listing fresh so the badge appears and clears on
+  // its own. A run takes minutes, so eight seconds is frequent enough to feel live and rare enough
+  // to cost nothing; when nothing is running there is no timer at all.
+  useEffect(() => {
+    if (!anyRunning) return;
+    const timer = window.setInterval(reload, 8000);
+    return () => window.clearInterval(timer);
+  }, [anyRunning, reload]);
 
   return (
     <div className="mx-auto max-w-[84rem] space-y-7">
@@ -287,7 +297,12 @@ function ProcessCard({
           </h3>
           <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{process.industry}</p>
         </div>
-        <Badge tone={analysed ? "good" : "neutral"}>{analysed ? "Analysed" : "Not run"}</Badge>
+        {/* Running wins over the stored status: it is the thing the reader can act on. */}
+        {process.analysisRunning ? (
+          <Badge tone="brand">Analysing…</Badge>
+        ) : (
+          <Badge tone={analysed ? "good" : "neutral"}>{analysed ? "Analysed" : "Not run"}</Badge>
+        )}
       </div>
 
       <p className="mt-2.5 line-clamp-3 flex-1 text-xs leading-relaxed text-[var(--text-secondary)]">
@@ -310,6 +325,7 @@ function ProcessCard({
       </dl>
 
       <p className="mt-2.5 text-[0.6875rem] text-[var(--text-muted)]">
+        {process.analysisRunning ? "A run is in progress · " : ""}
         {process.shared ? "Shared sample · " : ""}
         {sortedBy === "analysed" && process.lastAnalyzedAt
           ? `Analysed ${formatDateTime(process.lastAnalyzedAt)}`

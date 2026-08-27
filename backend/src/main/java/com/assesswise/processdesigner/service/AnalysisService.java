@@ -4,6 +4,7 @@ import com.assesswise.processdesigner.config.AppProperties;
 import com.assesswise.processdesigner.exception.AiNotConfiguredException;
 import com.assesswise.processdesigner.exception.AiProviderException;
 import com.assesswise.processdesigner.exception.AnalysisFailedException;
+import com.assesswise.processdesigner.dto.ActiveRunDto;
 import com.assesswise.processdesigner.exception.AnalysisInProgressException;
 import com.assesswise.processdesigner.service.KnowledgeRetrievalService.ScoredSnippet;
 import com.assesswise.processdesigner.service.ai.AiCompletion;
@@ -66,6 +67,7 @@ public class AnalysisService {
     private final AnalysisRunRecorder runRecorder;
     private final AnalysisRateLimiter rateLimiter;
     private final StagedAnalysisPipeline stagedPipeline;
+    private final AnalysisInsightService insightService;
     private final boolean useStagedPipeline;
 
     /**
@@ -87,6 +89,7 @@ public class AnalysisService {
             AnalysisRunRecorder runRecorder,
             AnalysisRateLimiter rateLimiter,
             StagedAnalysisPipeline stagedPipeline,
+            AnalysisInsightService insightService,
             AppProperties properties) {
         this.inputLoader = inputLoader;
         this.knowledgeRetrievalService = knowledgeRetrievalService;
@@ -99,6 +102,7 @@ public class AnalysisService {
         this.runRecorder = runRecorder;
         this.rateLimiter = rateLimiter;
         this.stagedPipeline = stagedPipeline;
+        this.insightService = insightService;
         this.useStagedPipeline = !"single".equalsIgnoreCase(properties.analysis().pipeline());
         log.info("Analysis pipeline: {}", useStagedPipeline ? StagedAnalysisPipeline.PIPELINE_VERSION : SINGLE_CALL_PIPELINE);
     }
@@ -137,8 +141,7 @@ public class AnalysisService {
                             + "restart it.");
         }
         if (!inFlight.add(processId)) {
-            throw new AnalysisInProgressException(
-                    "An analysis is already running for this process. Wait for it to finish before starting another.");
+            throw alreadyRunning(processId);
         }
         try {
             rateLimiter.acquire();
@@ -146,6 +149,46 @@ public class AnalysisService {
         } finally {
             inFlight.remove(processId);
         }
+    }
+
+    /**
+     * Refuses a second concurrent run, and says what the first one is doing.
+     *
+     * <p>A run outlives the tab that started it, so the caller colliding with one is very often not
+     * the person who started it — a second tab, a reloaded page, a colleague on a shared sample.
+     * "An analysis is already running" told them nothing they could act on. This names the process,
+     * how long the run has been going and which stage it is on, and the handler attaches the run
+     * itself so the interface can take them to it.
+     */
+    private AnalysisInProgressException alreadyRunning(UUID processId) {
+        ActiveRunDto active = insightService.activeRun(processId).orElse(null);
+        if (active == null) {
+            // The run holds the in-flight slot but has not written its row yet — a window of
+            // milliseconds at the very start of a run.
+            return new AnalysisInProgressException(
+                    "An analysis of this process has just started. Give it a moment, then reload the page "
+                            + "to follow it.",
+                    null);
+        }
+        String where = active.currentStageTitle() == null
+                ? "%d of %d stages done".formatted(active.stagesCompleted(), active.stagesTotal())
+                : "on stage %d of %d, %s".formatted(
+                        active.stagesCompleted() + 1, active.stagesTotal(), active.currentStageTitle());
+        return new AnalysisInProgressException(
+                "\"%s\" is being analysed already — started %s ago and %s. Open that process to watch it; "
+                        .formatted(active.processName(), humanise(active.elapsedMs()), where)
+                        + "the run continues even if you close the tab.",
+                active);
+    }
+
+    /** "40 seconds", "3 minutes" — enough precision for a message about a four-minute run. */
+    private static String humanise(long millis) {
+        long seconds = Math.max(1, millis / 1000);
+        if (seconds < 90) {
+            return seconds + (seconds == 1 ? " second" : " seconds");
+        }
+        long minutes = Math.round(seconds / 60.0);
+        return minutes + (minutes == 1 ? " minute" : " minutes");
     }
 
     // =============================================================================================

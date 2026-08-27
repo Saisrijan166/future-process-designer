@@ -129,8 +129,18 @@ public class ProcessService {
         Page<ProcessSummaryDto> result =
                 processRepository.findSummaryPage(user.id(), status, normalisedSearch, pageable);
 
+        // One small indexed query for the whole page, rather than a join bolted onto the grouped
+        // projection above where it would put the paging counts at risk. Answers "what is running,
+        // where" on the dashboard instead of making the user open each process to find out.
+        Set<UUID> running = insightService.processesBeingAnalysed();
+        List<ProcessSummaryDto> rows = running.isEmpty()
+                ? result.getContent()
+                : result.getContent().stream()
+                        .map(row -> running.contains(row.id()) ? row.running() : row)
+                        .toList();
+
         return new ProcessPageDto(
-                result.getContent(),
+                rows,
                 result.getNumber(),
                 result.getSize(),
                 result.getTotalElements(),
@@ -250,7 +260,12 @@ public class ProcessService {
         Map<UUID, List<AiIntervention>> interventionsByFuture = mapper.interventionsByFutureActivity(interventions);
 
         return new ProcessDetailDto(
-                mapper.toSummary(process, activities.size(), futureActivities.size(), opportunities.size()),
+                mapper.toSummary(
+                        process,
+                        activities.size(),
+                        futureActivities.size(),
+                        opportunities.size(),
+                        insightService.activeRun(processId).isPresent()),
                 activities.stream()
                         .map(activity -> mapper.toDto(
                                 activity, problemsByActivity.getOrDefault(activity.getId(), List.of())))

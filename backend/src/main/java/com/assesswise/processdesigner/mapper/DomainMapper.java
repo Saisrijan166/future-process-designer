@@ -70,7 +70,11 @@ public class DomainMapper {
     }
 
     public ProcessSummaryDto toSummary(
-            BusinessProcess process, long activityCount, long futureActivityCount, long opportunityCount) {
+            BusinessProcess process,
+            long activityCount,
+            long futureActivityCount,
+            long opportunityCount,
+            boolean analysisRunning) {
         return new ProcessSummaryDto(
                 process.getId(),
                 process.getName(),
@@ -83,7 +87,8 @@ public class DomainMapper {
                 futureActivityCount,
                 opportunityCount,
                 process.getCreatedAt(),
-                process.getLastAnalyzedAt());
+                process.getLastAnalyzedAt(),
+                analysisRunning);
     }
 
     public ActivityDto toDto(Activity activity, List<Problem> problemsForActivity) {

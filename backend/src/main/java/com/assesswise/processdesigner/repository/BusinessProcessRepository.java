@@ -50,7 +50,7 @@ public interface BusinessProcessRepository extends JpaRepository<BusinessProcess
                 p.id, p.name, p.industry, p.description, p.status, p.origin,
                 case when p.owner is null then true else false end,
                 count(distinct a.id), count(distinct fa.id), count(distinct op.id),
-                p.createdAt, p.lastAnalyzedAt)
+                p.createdAt, p.lastAnalyzedAt, false)
             from BusinessProcess p
             left join Activity a on a.process = p
             left join FutureActivity fa on fa.process = p

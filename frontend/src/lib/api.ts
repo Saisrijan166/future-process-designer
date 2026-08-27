@@ -1,4 +1,5 @@
 import type {
+  ActiveRun,
   AiStatus,
   AnalysisResult,
   AnalysisRunSummary,
@@ -80,6 +81,8 @@ interface ProblemDetail {
   reason?: string;
   retryAfterSeconds?: number;
   errors?: Record<string, string>;
+  /** On a 409 from /analyze: the run it collided with, so the client can go and watch it. */
+  activeRun?: ActiveRun;
 }
 
 export class ApiError extends Error {
@@ -204,6 +207,17 @@ export const api = {
 
   getRunStages: (id: string, runId: string) =>
     request<AnalysisStage[]>(`/api/processes/${id}/analysis-runs/${runId}/stages`),
+
+  /**
+   * The analysis running for this process right now, or null.
+   *
+   * <p>Polled, so the timeout is short: a slow answer is worth abandoning rather than queueing
+   * behind. The endpoint answers 204 when nothing is running, which `request` turns into
+   * undefined — normalised to null here so callers have one thing to check.
+   */
+  getActiveRun: (id: string) =>
+    request<ActiveRun | undefined>(`/api/processes/${id}/analysis-runs/active`, {}, 15_000)
+      .then((run) => run ?? null),
 
   /** The live research behind the stored analysis: queries, sources, and every quoted claim. */
   getResearch: (id: string) => request<ResearchRun>(`/api/processes/${id}/research`),

@@ -1,5 +1,6 @@
 package com.assesswise.processdesigner.controller;
 
+import com.assesswise.processdesigner.dto.ActiveRunDto;
 import com.assesswise.processdesigner.dto.AnalysisResultDto;
 import com.assesswise.processdesigner.dto.AnalysisRunSummaryDto;
 import com.assesswise.processdesigner.dto.AnalysisRunTraceDto;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -161,6 +163,19 @@ public class AnalysisController {
     public AnalysisRunTraceDto latestTrace(@PathVariable UUID id) {
         accessService.requireReadable(id, currentUserService.require());
         return runReader.latestTrace(id);
+    }
+
+    @GetMapping("/analysis-runs/active")
+    @Operation(summary = "The analysis running for this process right now, if there is one",
+            description = "204 when nothing is running. Read from the stage rows the pipeline commits "
+                    + "as it goes, so a run started in another tab — or by another person on a shared "
+                    + "sample — is visible here with its progress. Cheap enough to poll every few "
+                    + "seconds: it carries stage titles and status, not prompts.")
+    public ResponseEntity<ActiveRunDto> activeRun(@PathVariable UUID id) {
+        accessService.requireReadable(id, currentUserService.require());
+        return insightService.activeRun(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @GetMapping("/analysis-runs/{runId}/stages")

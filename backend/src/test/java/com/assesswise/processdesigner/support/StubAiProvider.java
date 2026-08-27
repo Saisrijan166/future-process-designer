@@ -54,6 +54,28 @@ public class StubAiProvider implements AiProvider {
         return this;
     }
 
+    /**
+     * Scripts a response that does not arrive until the latch is released.
+     *
+     * <p>For testing what a second caller sees while a run is genuinely in flight — which is not
+     * reproducible any other way, because the collision only exists inside the window where one
+     * request is still waiting on a model.
+     */
+    public StubAiProvider respondWhenReleased(String text, java.util.concurrent.CountDownLatch release) {
+        scriptedResponses.add(() -> {
+            try {
+                if (!release.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("StubAiProvider was never released");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+            return AiCompletion.of(text, 100, 200, 5L, "STOP", name(), model());
+        });
+        return this;
+    }
+
     public StubAiProvider failWith(RuntimeException exception) {
         scriptedResponses.add(() -> {
             throw exception;

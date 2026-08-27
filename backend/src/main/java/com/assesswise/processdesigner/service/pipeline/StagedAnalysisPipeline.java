@@ -55,6 +55,11 @@ public class StagedAnalysisPipeline {
         log.info("Analysis pipeline {}: {}", PIPELINE_VERSION, stages.stream().map(PipelineStage::id).toList());
     }
 
+    /** How many stages a run will attempt, so progress can be reported as "4 of 10". */
+    public int stageCount() {
+        return stages.size();
+    }
+
     /**
      * @param stageResults every stage in order, including the ones that failed
      * @param researchRunId the research pass this analysis used, or null if none ran

@@ -103,7 +103,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AnalysisInProgressException.class)
     public ProblemDetail handleInProgress(AnalysisInProgressException e, HttpServletRequest request) {
-        return problem(HttpStatus.CONFLICT, "Analysis already running", e.getMessage(), request);
+        ProblemDetail detail = problem(HttpStatus.CONFLICT, "Analysis already running", e.getMessage(), request);
+        // So the interface can take the user to the run rather than just repeating the refusal.
+        if (e.activeRun() != null) {
+            detail.setProperty("activeRun", e.activeRun());
+        }
+        return detail;
     }
 
     @ExceptionHandler(RateLimitExceededException.class)

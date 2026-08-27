@@ -319,6 +319,7 @@ against existing reference rows by name and created if new.
 | `POST` | `/api/processes/{id}/analyze` | Run the pipeline. Re-runnable and idempotent |
 | `POST` | `/api/processes/{id}/analyze/stream` | The same run, streaming its progress as Server-Sent Events |
 | `GET` | `/api/processes/{id}/research` | The research behind the stored analysis: queries, sources with their credibility arithmetic, and every claim with its checked quote |
+| `GET` | `/api/processes/{id}/analysis-runs/active` | The run happening right now: stage progress, elapsed time, current stage. `204` when nothing is running. Cheap enough to poll — it carries stage titles, not prompts |
 | `GET` | `/api/processes/{id}/analysis-runs` | Run history with provider, model, tokens, cache hits and duration |
 | `GET` | `/api/processes/{id}/analysis-runs/latest/trace` | Every stage, with the exact prompt sent and the exact text returned |
 | `GET` | `/api/processes/{id}/analysis-runs/{runId}/stages` | The same, for a specific run |
@@ -372,7 +373,7 @@ Spring error page is disabled (`server.error.include-message: never`).
 | `400` | Validation failed — includes per-field detail |
 | `401` | Missing, expired or invalid token |
 | `404` | Not found, **or** the process belongs to someone else |
-| `409` | An analysis is already running for this process |
+| `409` | An analysis is already running for this process. The body names it — which process, how long it has been going, which stage it is on — and carries the run itself under `activeRun`, because a run outlives the tab that started it and the caller colliding with one is usually not the person who started it |
 | `422` | The model output was unusable even after the repair retry |
 | `429` | Rate limited |
 | `502` | Every configured provider failed |

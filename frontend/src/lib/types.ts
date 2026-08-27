@@ -108,6 +108,8 @@ export interface ProcessSummary {
   opportunityCount: number;
   createdAt: string;
   lastAnalyzedAt: string | null;
+  /** An analysis of this process is running right now — possibly started somewhere else. */
+  analysisRunning: boolean;
 }
 
 export interface Activity {
@@ -403,6 +405,33 @@ export interface AnalysisRunSummary {
   throttledMs: number;
   researchRunId: string | null;
   scorecard: Scorecard | null;
+}
+
+/**
+ * An analysis running right now, as the server sees it.
+ *
+ * <p>A run outlives the tab that started it, so this is how any other view — a reloaded page, a
+ * second tab, a colleague on a shared sample — finds out what is happening and how far along it is.
+ */
+export interface ActiveRun {
+  runId: string;
+  processId: string;
+  processName: string;
+  startedAt: string;
+  elapsedMs: number;
+  stagesCompleted: number;
+  stagesTotal: number;
+  currentStageId: string | null;
+  currentStageTitle: string | null;
+  stages: StageProgress[];
+}
+
+export interface StageProgress {
+  stageId: string;
+  title: string;
+  status: StageStatus;
+  durationMs: number | null;
+  summary: string | null;
 }
 
 export interface AnalysisStage {

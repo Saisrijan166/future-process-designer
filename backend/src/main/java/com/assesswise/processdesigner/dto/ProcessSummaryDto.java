@@ -19,4 +19,17 @@ public record ProcessSummaryDto(
         long futureActivityCount,
         long opportunityCount,
         Instant createdAt,
-        Instant lastAnalyzedAt) {}
+        Instant lastAnalyzedAt,
+        /**
+         * True while an analysis of this process is running — so the dashboard can answer "what is
+         * running, where" without the user having to open each process to find out.
+         */
+        boolean analysisRunning) {
+
+    /** The listing query cannot know this; it is filled in from one small query afterwards. */
+    public ProcessSummaryDto running() {
+        return new ProcessSummaryDto(
+                id, name, industry, description, status, origin, shared,
+                activityCount, futureActivityCount, opportunityCount, createdAt, lastAnalyzedAt, true);
+    }
+}

@@ -1,9 +1,14 @@
 package com.assesswise.processdesigner.service;
 
+import com.assesswise.processdesigner.config.AppProperties;
+import com.assesswise.processdesigner.domain.AnalysisRun;
 import com.assesswise.processdesigner.domain.AnalysisRunStatus;
+import com.assesswise.processdesigner.domain.AnalysisStage;
 import com.assesswise.processdesigner.domain.EvidenceClaim;
 import com.assesswise.processdesigner.domain.ResearchRun;
 import com.assesswise.processdesigner.domain.ResearchSource;
+import com.assesswise.processdesigner.domain.StageStatus;
+import com.assesswise.processdesigner.dto.ActiveRunDto;
 import com.assesswise.processdesigner.dto.AnalysisStageDto;
 import com.assesswise.processdesigner.dto.ImpactEstimateDto;
 import com.assesswise.processdesigner.dto.OpportunityScoreDto;
@@ -24,10 +29,15 @@ import com.assesswise.processdesigner.repository.ResearchRunRepository;
 import com.assesswise.processdesigner.repository.ResearchSourceRepository;
 import com.assesswise.processdesigner.repository.RiskItemRepository;
 import com.assesswise.processdesigner.repository.RoadmapItemRepository;
+import com.assesswise.processdesigner.service.pipeline.StagedAnalysisPipeline;
+
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +67,15 @@ public class AnalysisInsightService {
     private final EvidenceClaimRepository claimRepository;
     private final DomainMapper mapper;
 
+    /**
+     * How many stages a run will attempt, so progress reads as "4 of 10".
+     *
+     * <p>Taken from the configured pipeline rather than from the run row, because a run only records
+     * which pipeline produced it once it has finished — and this is a question about a run that has
+     * not.
+     */
+    private final int stagesTotal;
+
     public AnalysisInsightService(
             OpportunityScoreRepository scoreRepository,
             ImpactEstimateRepository impactRepository,
@@ -69,7 +88,9 @@ public class AnalysisInsightService {
             ResearchQueryRepository researchQueryRepository,
             ResearchSourceRepository researchSourceRepository,
             EvidenceClaimRepository claimRepository,
-            DomainMapper mapper) {
+            DomainMapper mapper,
+            StagedAnalysisPipeline pipeline,
+            AppProperties properties) {
         this.scoreRepository = scoreRepository;
         this.impactRepository = impactRepository;
         this.riskRepository = riskRepository;
@@ -82,6 +103,9 @@ public class AnalysisInsightService {
         this.researchSourceRepository = researchSourceRepository;
         this.claimRepository = claimRepository;
         this.mapper = mapper;
+        this.stagesTotal = "single".equalsIgnoreCase(properties.analysis().pipeline())
+                ? 1
+                : pipeline.stageCount();
     }
 
     /** Everything the detail view needs beyond the current and future state, in one read. */
@@ -161,6 +185,65 @@ public class AnalysisInsightService {
                 researchQueryRepository.findByResearchRunIdOrderByDisplayOrderAsc(run.getId()),
                 researchSourceRepository.findByResearchRunIdOrderByDisplayOrderAsc(run.getId()),
                 claimRepository.findWithSourcesByRun(run.getId())));
+    }
+
+    /**
+     * The analysis running for this process right now, if there is one.
+     *
+     * <p>Read from the database rather than from any in-memory registry, and that is the point: the
+     * pipeline commits each stage's start and finish in its own transaction, so a run is visible to
+     * a different tab, a reloaded page, or a second instance behind a load balancer. Without this,
+     * a run that outlived the tab that started it was invisible — the page showed nothing happening
+     * and the button refused to work, with no way to find out why.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ActiveRunDto> activeRun(UUID processId) {
+        return runRepository
+                .findFirstByProcessIdAndStatusOrderByStartedAtDesc(processId, AnalysisRunStatus.RUNNING)
+                .map(this::toActiveRun);
+    }
+
+    private ActiveRunDto toActiveRun(AnalysisRun run) {
+        List<AnalysisStage> rows = stageRepository.findByAnalysisRunIdOrderByDisplayOrderAsc(run.getId());
+
+        List<ActiveRunDto.StageProgressDto> stages = rows.stream()
+                .map(stage -> new ActiveRunDto.StageProgressDto(
+                        stage.getStageId(),
+                        stage.getTitle(),
+                        stage.getStatus(),
+                        stage.getDurationMs(),
+                        stage.getSummary()))
+                .toList();
+
+        // A stage row is inserted when the stage starts and updated when it ends, so exactly one
+        // row is RUNNING while the pipeline is between commits — that is the current stage.
+        AnalysisStage current = rows.stream()
+                .filter(stage -> stage.getStatus() == StageStatus.RUNNING)
+                .findFirst()
+                .orElse(null);
+        long finished = rows.stream().filter(stage -> stage.getStatus() != StageStatus.RUNNING).count();
+
+        return new ActiveRunDto(
+                run.getId(),
+                processId(run),
+                run.getProcess().getName(),
+                run.getStartedAt(),
+                Duration.between(run.getStartedAt(), Instant.now()).toMillis(),
+                (int) finished,
+                stagesTotal,
+                current == null ? null : current.getStageId(),
+                current == null ? null : current.getTitle(),
+                stages);
+    }
+
+    private static UUID processId(AnalysisRun run) {
+        return run.getProcess().getId();
+    }
+
+    /** Every process with an analysis running right now, for the dashboard. */
+    @Transactional(readOnly = true)
+    public Set<UUID> processesBeingAnalysed() {
+        return Set.copyOf(runRepository.findProcessIdsByStatus(AnalysisRunStatus.RUNNING));
     }
 
     /** Every stage of one run, in order, with prompts and responses. */

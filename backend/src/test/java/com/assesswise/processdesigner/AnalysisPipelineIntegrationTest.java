@@ -7,6 +7,7 @@ import com.assesswise.processdesigner.domain.AutomationPotential;
 import com.assesswise.processdesigner.domain.ProblemSource;
 import com.assesswise.processdesigner.domain.ProcessStatus;
 import com.assesswise.processdesigner.domain.ResponsibilityType;
+import com.assesswise.processdesigner.dto.ActiveRunDto;
 import com.assesswise.processdesigner.dto.AnalysisResultDto;
 import com.assesswise.processdesigner.dto.ComparisonDto;
 import com.assesswise.processdesigner.dto.CreateProcessRequest;
@@ -17,8 +18,10 @@ import com.assesswise.processdesigner.exception.AiProviderException;
 import com.assesswise.processdesigner.support.AbstractIntegrationTest;
 import com.assesswise.processdesigner.support.AuthenticatedClient;
 import com.assesswise.processdesigner.support.StubAiProvider;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -231,6 +234,69 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
         assertThat(items.stream().map(ProcessSummaryDto::lastAnalyzedAt).toList())
                 .as("every process with a date comes before every process without one")
                 .containsSubsequence(items.get(0).lastAnalyzedAt(), null);
+    }
+
+    @Test
+    @DisplayName("nothing is running: the active-run endpoint says so with 204, not an empty object")
+    void reportsNoActiveRun() {
+        UUID processId = createProcess("Idle Process " + UUID.randomUUID());
+
+        ResponseEntity<String> response =
+                client.get("/api/processes/" + processId + "/analysis-runs/active", String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("a second analysis is refused with the first one's progress, not a bare message")
+    void refusalNamesTheRunAlreadyGoing() throws Exception {
+        // The collision only exists while a run is genuinely in flight, so the stub holds the model
+        // call open until this test lets go of it.
+        CountDownLatch release = new CountDownLatch(1);
+        aiProvider.respondWhenReleased(validModelResponse(), release);
+        UUID processId = createProcess("Contested Process " + UUID.randomUUID());
+
+        Thread first = Thread.ofVirtual().start(() -> analyze(processId));
+        try {
+            // Wait for the run row to exist — the refusal can only describe a run that has started.
+            ActiveRunDto active = awaitActiveRun(processId);
+            assertThat(active.processName()).startsWith("Contested Process");
+            assertThat(active.runId()).isNotNull();
+            assertThat(active.startedAt()).isNotNull();
+
+            ResponseEntity<String> refusal =
+                    client.post("/api/processes/" + processId + "/analyze", null, String.class);
+
+            assertThat(refusal.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(refusal.getBody())
+                    .as("the message should name the process and where the run has got to")
+                    .contains("Contested Process")
+                    .contains("Open that process to watch it");
+            assertThat(refusal.getBody())
+                    .as("and carry the run itself, so the interface can navigate to it")
+                    .contains("\"activeRun\"")
+                    .contains(active.runId().toString());
+        } finally {
+            release.countDown();
+            first.join(Duration.ofSeconds(30));
+        }
+
+        // And once it is over, the endpoint goes quiet again.
+        assertThat(client.get("/api/processes/" + processId + "/analysis-runs/active", String.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    private ActiveRunDto awaitActiveRun(UUID processId) throws InterruptedException {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            ResponseEntity<ActiveRunDto> response =
+                    client.get("/api/processes/" + processId + "/analysis-runs/active", ActiveRunDto.class);
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return response.getBody();
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("No active run appeared for process " + processId);
     }
 
     @Test
