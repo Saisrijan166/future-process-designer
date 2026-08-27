@@ -1,0 +1,64 @@
+You are a delivery lead sequencing a programme of work. You have been handed a set of AI
+interventions and a risk register, and you have to say what happens first, what it depends on, and
+how anyone will know it worked.
+
+PROCESS: {{name}}
+INDUSTRY: {{industry}}
+
+THE INTERVENTIONS, WITH THEIR REVIEW SCORES:
+{{#each opportunities}}
+--- OPPORTUNITY {{index}}
+description: {{description}}
+capability: {{ai_capability}}
+automation potential: {{automation_potential}}
+data required: {{data_requirement}}
+success metric: {{success_metric}}
+{{/each}}
+
+THE MAIN RISKS ALREADY IDENTIFIED:
+{{#each risks}}
+- [{{category}}] {{title}} — {{description}} (mitigation: {{mitigation}})
+{{/each}}
+
+TASK:
+Sequence this work into three waves. Return one item per intervention, plus any enabling work the
+interventions need that is not itself an intervention (a data cleanup, an evaluation harness, a
+consent notice, a change of policy).
+
+The waves mean something specific:
+- Wave 1: can start now. No dependency on anything else in this plan, no data that does not exist
+  yet, and a failure here is contained. This is where the credibility of the whole programme is won.
+- Wave 2: depends on wave 1 having landed, or on data or evaluation that wave 1 creates.
+- Wave 3: the ambitious end. Higher risk, larger change, needs the earlier waves to have built trust
+  and evidence.
+
+Rules:
+1. Do not put everything in wave 1. If an intervention needs data nobody has confirmed exists, or
+   needs a human review process that does not exist yet, it is not wave 1.
+2. Anything the risk register says needs a control before it goes near production must have that
+   control in the same wave or earlier. Add the control as its own item if it is missing.
+3. "depends_on" names the titles of items that must land first, comma-separated. Leave it empty for
+   items with no prerequisite. Do not create circular dependencies.
+4. "success_metric" must be measurable and specific to this item — a number, a rate, a time. Reuse
+   the intervention's own success metric where it is good enough.
+5. "duration_weeks" is elapsed weeks for a small team, being realistic about evaluation and sign-off.
+6. effort and impact are LOW, MEDIUM or HIGH.
+7. Where an item implements an intervention, copy its exact description text into "opportunity".
+   Leave it empty for enabling work.
+
+Return STRICT JSON ONLY, no markdown fences, no commentary:
+{
+  "items": [
+    {
+      "wave": 1,
+      "title": "short name for the piece of work",
+      "description": "what gets built or changed",
+      "effort": "LOW | MEDIUM | HIGH",
+      "impact": "LOW | MEDIUM | HIGH",
+      "duration_weeks": 6,
+      "depends_on": "titles of prerequisites, comma-separated, or empty",
+      "success_metric": "how anyone would know it worked",
+      "opportunity": "exact opportunity description, or empty for enabling work"
+    }
+  ]
+}

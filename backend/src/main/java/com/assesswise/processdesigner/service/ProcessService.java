@@ -71,6 +71,7 @@ public class ProcessService {
     private final AppUserRepository userRepository;
     private final ProcessAccessService accessService;
     private final DomainMapper mapper;
+    private final AnalysisInsightService insightService;
 
     public ProcessService(
             BusinessProcessRepository processRepository,
@@ -84,7 +85,8 @@ public class ProcessService {
             SystemToolRepository systemToolRepository,
             AppUserRepository userRepository,
             ProcessAccessService accessService,
-            DomainMapper mapper) {
+            DomainMapper mapper,
+            AnalysisInsightService insightService) {
         this.processRepository = processRepository;
         this.activityRepository = activityRepository;
         this.problemRepository = problemRepository;
@@ -97,6 +99,7 @@ public class ProcessService {
         this.userRepository = userRepository;
         this.accessService = accessService;
         this.mapper = mapper;
+        this.insightService = insightService;
     }
 
     /** Sort keys the API accepts, mapped to entity properties so the client cannot inject one. */
@@ -219,10 +222,19 @@ public class ProcessService {
                 futureActivityRepository.findByProcessIdOrderBySequenceOrderAsc(processId);
         List<AiIntervention> interventions = interventionRepository.findByProcessIdOrderByCreatedAtAsc(processId);
 
-        // The latest run of any status, so a failure stays visible in the UI...
+        // Reviews, impact figures, risks, plan and scorecard. One extra read rather than five more
+        // endpoints: the interface renders them as one document.
+        AnalysisInsightService.Insights insights = insightService.forProcess(processId);
+
+        // The latest run of any status, so a failure stays visible in the UI. Its scorecard is
+        // attached only when it belongs to that run — a failed re-run must not inherit the score of
+        // the successful one before it.
         AnalysisRunSummaryDto latestRun = analysisRunRepository
                 .findFirstByProcessIdOrderByStartedAtDesc(processId)
-                .map(mapper::toDto)
+                .map(run -> mapper.toDto(run,
+                        insights.scorecard() != null && run.getId().equals(insights.scorecard().analysisRunId())
+                                ? insights.scorecard()
+                                : null))
                 .orElse(null);
         // ...but the Evidence tab must describe the analysis that is actually stored, which is the
         // last one that succeeded — otherwise a failed re-run would relabel sources that never
@@ -242,14 +254,24 @@ public class ProcessService {
                                 activity, problemsByActivity.getOrDefault(activity.getId(), List.of())))
                         .toList(),
                 problems.stream().map(mapper::toDto).toList(),
-                opportunities.stream().map(mapper::toDto).toList(),
+                opportunities.stream()
+                        .map(opportunity -> mapper.toDto(
+                                opportunity,
+                                insights.reviewsByOpportunity().get(opportunity.getId()),
+                                insights.impactsByOpportunity().get(opportunity.getId())))
+                        .toList(),
                 futureActivities.stream()
                         .map(futureActivity -> mapper.toDto(
                                 futureActivity, interventionsByFuture.getOrDefault(futureActivity.getId(), List.of())))
                         .toList(),
                 interventions.stream().map(mapper::toDto).toList(),
                 evidence,
-                latestRun);
+                latestRun,
+                insights.impacts(),
+                insights.risks(),
+                insights.roadmap(),
+                insights.scorecard(),
+                insights.research());
     }
 
     /**

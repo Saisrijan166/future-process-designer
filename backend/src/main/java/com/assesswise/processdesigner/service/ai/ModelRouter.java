@@ -19,13 +19,18 @@ import org.springframework.stereotype.Component;
  * queueing. Two properties of the free tier drive every choice in {@link #DEFAULT_ROUTES}:
  *
  * <ul>
- *   <li><b>Rate limits are per model.</b> Ten stages sharing one model share one 8,000
- *       tokens-per-minute bucket. Spread across three models, they have three buckets. So
- *       consecutive stages are deliberately sent to <em>different</em> models even where the
- *       stronger one would have been slightly better at both.
  *   <li><b>Most stages do not need the strongest model.</b> Turning a fetched page into quoted
  *       claims is close to mechanical; only diagnosis, opportunity generation and the future-state
- *       design genuinely benefit from the 120B model, so only they are routed to it.
+ *       design genuinely benefit from the 120B model, so only they are routed to it. Sending the
+ *       cheap work elsewhere leaves the strong model's daily allowance for the work that needs it.
+ *   <li><b>Spreading across models helps less than it appears, and it is worth being precise about
+ *       why.</b> Groq's free tier publishes per-model rate limits, but enforces a shared
+ *       organisation-wide tokens-per-minute ceiling on top of them: a call to
+ *       {@code groq/compound-mini} was measured being refused with "Rate limit reached for model
+ *       openai/gpt-oss-120b". So a second model buys a second daily request allowance, not extra
+ *       throughput. The genuine throughput multiplier is a second <em>provider</em> — Gemini's quota
+ *       is entirely separate — which is why the high-volume tasks rotate across providers rather
+ *       than across models.
  * </ul>
  *
  * <p>One route is chosen for a reason that is not about cost at all: {@link AiTask#CRITIQUE} runs
@@ -167,9 +172,13 @@ public class ModelRouter {
         // A different family from OPPORTUNITIES on purpose — see the class comment.
         routes.put(AiTask.CRITIQUE, List.of("groq:qwen/qwen3.8-27b", "groq:openai/gpt-oss-20b", "gemini:"));
         routes.put(AiTask.FUTURE_DESIGN, List.of("groq:openai/gpt-oss-120b", "groq:qwen/qwen3.8-27b", "gemini:"));
-        routes.put(AiTask.QUANTIFICATION, List.of("groq:openai/gpt-oss-20b", "groq:qwen/qwen3.6-27b"));
+        // Gemini first for the two stages that need care rather than brilliance. Its quota is
+        // entirely separate from Groq's shared per-minute ceiling, so moving these two off Groq
+        // takes roughly 7,000 tokens out of the constrained budget and about a minute off a run.
+        routes.put(AiTask.QUANTIFICATION,
+                List.of("gemini:", "groq:openai/gpt-oss-120b", "groq:openai/gpt-oss-20b"));
         routes.put(AiTask.RISK, List.of("groq:qwen/qwen3.8-27b", "groq:openai/gpt-oss-120b", "gemini:"));
-        routes.put(AiTask.ROADMAP, List.of("groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b"));
+        routes.put(AiTask.ROADMAP, List.of("gemini:", "groq:openai/gpt-oss-120b", "groq:openai/gpt-oss-20b"));
         routes.put(AiTask.REPAIR, List.of("groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b", "gemini:"));
         routes.put(AiTask.LEGACY_ANALYSIS, List.of("groq:openai/gpt-oss-120b", "gemini:"));
         return routes;

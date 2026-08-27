@@ -562,8 +562,9 @@ public class ResearchOrchestrator {
                         || source.getFetchStatus() == FetchStatus.SKIPPED)
                 .count();
         if (blocked > 0) {
-            notes.add("%d of %d sources could not be read (publisher blocked automated access or robots.txt "
-                    + "disallowed it); they are kept with their search snippet".formatted(blocked, toRead.size()));
+            notes.add(("%d of %d sources could not be read (publisher blocked automated access or robots.txt "
+                            + "disallowed it); they are kept with their search snippet")
+                    .formatted(blocked, toRead.size()));
         }
         persistence.saveSources(sources);
         return readOutcomeOf(readable, cacheHits.get(), notes);

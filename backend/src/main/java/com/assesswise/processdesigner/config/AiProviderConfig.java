@@ -88,6 +88,8 @@ public class AiProviderConfig {
             ObjectMapper objectMapper,
             RateLimitListener listener) {
 
+        String envVar = "AI_%s_API_KEY".formatted(name.toUpperCase(Locale.ROOT));
+
         String baseUrl = config.baseUrl() == null || config.baseUrl().isBlank() ? defaultBaseUrl : config.baseUrl();
         return new OpenAiCompatibleProvider(
                 new OpenAiCompatibleProvider.Spec(
@@ -103,6 +105,7 @@ public class AiProviderConfig {
                         config.maxTransportRetries(),
                         config.requiresApiKey(),
                         false,
+                        envVar,
                         keysUrl),
                 objectMapper,
                 listener);

@@ -40,6 +40,7 @@ public class GroqProvider extends OpenAiCompatibleProvider {
                         config.maxTransportRetries(),
                         true,
                         true,
+                        "GROQ_API_KEY",
                         "https://console.groq.com/keys"),
                 objectMapper,
                 listener);

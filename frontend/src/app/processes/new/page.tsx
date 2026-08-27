@@ -5,15 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Button,
-  Card,
   ErrorPanel,
-  Field,
+  FormField,
   INPUT_CLASSES,
+  Modal,
+  Panel,
   SectionHeading,
   Spinner,
 } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
-import { Modal } from "@/components/modal";
 import { PROCESS_EXAMPLES, type ProcessExample } from "@/lib/examples";
 import type { CreateProcessRequest, Role, SystemTool } from "@/lib/types";
 
@@ -131,13 +131,13 @@ export default function NewProcessPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-[var(--text-link)] hover:underline">
           <span aria-hidden="true">←</span> All processes
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink-900">
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
           Describe a process as it runs today
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-600">
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--text-secondary)]">
           Any industry works — the system has no special knowledge of the samples. Write it the way
           you would explain it to a new joiner: rough is fine, specific is better. When you save, the
           analysis starts straight away.
@@ -175,10 +175,10 @@ export default function NewProcessPage() {
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="p-5">
+        <Panel className="p-5">
           <SectionHeading title="What is the process?" />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Name" htmlFor="name" required error={fieldErrors.name}>
+            <FormField label="Name" htmlFor="name" required error={fieldErrors.name}>
               <input
                 id="name"
                 value={name}
@@ -188,8 +188,8 @@ export default function NewProcessPage() {
                 className={INPUT_CLASSES}
                 required
               />
-            </Field>
-            <Field
+            </FormField>
+            <FormField
               label="Industry"
               htmlFor="industry"
               required
@@ -205,10 +205,10 @@ export default function NewProcessPage() {
                 className={INPUT_CLASSES}
                 required
               />
-            </Field>
+            </FormField>
           </div>
           <div className="mt-4">
-            <Field
+            <FormField
               label="Description"
               htmlFor="description"
               required
@@ -225,22 +225,22 @@ export default function NewProcessPage() {
                 className={INPUT_CLASSES}
                 required
               />
-            </Field>
+            </FormField>
           </div>
-        </Card>
+        </Panel>
 
-        <Card className="p-5">
+        <Panel className="p-5">
           <SectionHeading
             title="The steps, in order"
-            description="What actually happens today — including the manual, tedious parts. Roles and systems are optional, but naming them makes the analysis noticeably sharper."
+            hint="What actually happens today — including the manual, tedious parts. Roles and systems are optional, but naming them makes the analysis noticeably sharper."
           />
 
           <ol className="space-y-4">
             {activities.map((activity, index) => (
-              <li key={activity.key} className="animate-rise rounded-xl border border-ink-200 bg-ink-50/70 p-4">
+              <li key={activity.key} className="rise-in rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-1)] p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-ink-500 uppercase">
-                    <span className="grid size-5 place-items-center rounded-full bg-ink-200 text-[11px] text-ink-700">
+                  <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                    <span className="grid size-5 place-items-center rounded-full bg-ink-200 text-[11px] text-[var(--text-secondary)]">
                       {index + 1}
                     </span>
                     Step {index + 1}
@@ -249,14 +249,14 @@ export default function NewProcessPage() {
                     type="button"
                     onClick={() => removeActivity(activity.key)}
                     disabled={activities.length <= 1}
-                    className="text-xs font-medium text-ink-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="text-xs font-medium text-[var(--text-muted)] hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Remove
                   </button>
                 </div>
 
                 <div className="space-y-3">
-                  <Field label="What happens" htmlFor={`${activity.key}-name`} required>
+                  <FormField label="What happens" htmlFor={`${activity.key}-name`} required>
                     <input
                       id={`${activity.key}-name`}
                       value={activity.name}
@@ -265,8 +265,8 @@ export default function NewProcessPage() {
                       placeholder="Match the invoice to the purchase order"
                       className={INPUT_CLASSES}
                     />
-                  </Field>
-                  <Field label="Detail" htmlFor={`${activity.key}-description`}>
+                  </FormField>
+                  <FormField label="Detail" htmlFor={`${activity.key}-description`}>
                     <textarea
                       id={`${activity.key}-description`}
                       value={activity.description}
@@ -278,9 +278,9 @@ export default function NewProcessPage() {
                       placeholder="How it is done today, and what makes it slow or error-prone."
                       className={INPUT_CLASSES}
                     />
-                  </Field>
+                  </FormField>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field
+                    <FormField
                       label="Roles"
                       htmlFor={`${activity.key}-roles`}
                       hint="Comma separated"
@@ -293,8 +293,8 @@ export default function NewProcessPage() {
                         placeholder="Accounts Payable Clerk"
                         className={INPUT_CLASSES}
                       />
-                    </Field>
-                    <Field
+                    </FormField>
+                    <FormField
                       label="Systems"
                       htmlFor={`${activity.key}-systems`}
                       hint="Comma separated"
@@ -309,7 +309,7 @@ export default function NewProcessPage() {
                         placeholder="ERP, Email"
                         className={INPUT_CLASSES}
                       />
-                    </Field>
+                    </FormField>
                   </div>
                 </div>
               </li>
@@ -336,14 +336,14 @@ export default function NewProcessPage() {
           >
             + Add a step
           </Button>
-        </Card>
+        </Panel>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <p className="mr-auto text-xs text-ink-500">
+          <p className="mr-auto text-xs text-[var(--text-muted)]">
             {filledActivities.length} step{filledActivities.length === 1 ? "" : "s"} will be saved,
             then analysed immediately.
           </p>
-          <Link href="/" className="text-sm font-medium text-ink-600 hover:text-ink-900">
+          <Link href="/" className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             Cancel
           </Link>
           <Button type="submit" disabled={!canSubmit}>
@@ -374,9 +374,9 @@ function ExampleBar({
   const loaded = PROCESS_EXAMPLES.find((example) => example.id === loadedExample);
 
   return (
-    <Card className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
+    <Panel className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
       {loaded ? (
-        <p className="flex flex-wrap items-center gap-2 text-sm text-ink-600">
+        <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-900 px-2.5 py-1 text-xs font-medium text-white">
             <svg className="size-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
@@ -392,9 +392,9 @@ function ExampleBar({
           loaded into the form — edit anything before submitting.
         </p>
       ) : (
-        <p className="text-sm text-ink-600">
+        <p className="text-sm text-[var(--text-secondary)]">
           Not sure what to write?{" "}
-          <span className="text-ink-500">
+          <span className="text-[var(--text-muted)]">
             Load one of {PROCESS_EXAMPLES.length} example processes from different industries.
           </span>
         </p>
@@ -410,7 +410,7 @@ function ExampleBar({
           {loaded ? "Choose another" : "Browse examples"}
         </Button>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -437,8 +437,13 @@ function ExampleDialog({
       open={open}
       onClose={onClose}
       title="Start from an example"
-      description="Each one fills the form with a real-looking process from a different industry. They are inputs, not saved answers — the analysis still runs from scratch, and you can edit anything before submitting."
+      width="52rem"
     >
+      <p className="mb-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+        Each one fills the form with a real-looking process from a different industry. They are
+        inputs, not saved answers — the analysis still runs from scratch, researches that domain
+        live, and you can edit anything before submitting.
+      </p>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {PROCESS_EXAMPLES.map((example) => {
           const active = loadedExample === example.id;
@@ -451,7 +456,7 @@ function ExampleDialog({
                 className={`flex h-full w-full flex-col rounded-xl border p-3 text-left transition-colors ${
                   active
                     ? "border-ink-900 bg-ink-900 text-white"
-                    : "border-ink-200 bg-white hover:border-ink-300 hover:bg-ink-50"
+                    : "border-[var(--border-subtle)] bg-[var(--surface-2)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-1)]"
                 }`}
               >
                 <span className="flex items-start justify-between gap-2">
@@ -468,16 +473,16 @@ function ExampleDialog({
                     </svg>
                   ) : null}
                 </span>
-                <span className={`mt-0.5 text-xs ${active ? "text-ink-300" : "text-ink-500"}`}>
+                <span className={`mt-0.5 text-xs ${active ? "text-ink-300" : "text-[var(--text-muted)]"}`}>
                   {example.industry}
                 </span>
                 <span
-                  className={`mt-1.5 text-xs leading-relaxed ${active ? "text-ink-200" : "text-ink-600"}`}
+                  className={`mt-1.5 text-xs leading-relaxed ${active ? "text-ink-200" : "text-[var(--text-secondary)]"}`}
                 >
                   {example.teaser}
                 </span>
                 <span
-                  className={`mt-2 text-[11px] font-medium ${active ? "text-ink-300" : "text-ink-400"}`}
+                  className={`mt-2 text-[11px] font-medium ${active ? "text-ink-300" : "text-[var(--text-muted)]"}`}
                 >
                   {example.activities.length} steps
                 </span>

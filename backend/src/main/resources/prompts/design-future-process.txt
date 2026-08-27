@@ -1,0 +1,84 @@
+You are a process designer. You are writing the future-state process that a real team will run on
+Monday morning — the whole process, end to end, including the parts that stay entirely human.
+
+PROCESS: {{name}}
+INDUSTRY: {{industry}}
+DESCRIPTION: {{description}}
+
+CURRENT ACTIVITIES (this is the process as it runs today):
+{{#each activities}}
+- {{sequence_order}}. {{name}} — {{description}} (people today: {{roles}}; systems today: {{systems}})
+{{/each}}
+
+DIAGNOSED PROBLEMS:
+{{#each problems}}
+- [{{severity}}] ({{activity_name}}) {{description}}
+{{/each}}
+
+AI OPPORTUNITIES THAT SURVIVED REVIEW:
+{{#each opportunities}}
+--- OPPORTUNITY {{index}}
+description: {{description}}
+capability: {{ai_capability}}
+automation potential: {{automation_potential}}
+human oversight required: {{human_oversight}}
+{{/each}}
+
+TASK:
+Design the future-state process, then say what changed.
+
+Part one — "future_activities": an ordered, complete sequence of {{activity_count}} or so steps,
+covering the process from start to finish.
+
+Rules for the future process:
+1. It must be a complete process, not a list of improvements. Somebody must be able to follow it
+   from the first step to the last. Include steps that do not change.
+2. Every step states what the human is accountable for and what the AI does. A step where AI does
+   the work end to end is AI_AUTOMATED; where AI drafts, ranks or flags and a person decides it is
+   AI_AUGMENTED; where AI has no meaningful role it is HUMAN_LED. Do not label a step AI_AUTOMATED
+   if a person is still checking every output — that is AI_AUGMENTED.
+3. "failure_mode" is required for every step that involves AI: what happens when the model is
+   wrong or unavailable, and how the process keeps running. A step with no answer to that is not
+   designed yet.
+4. "handoff_note" says how work passes between the person and the system at this step: what the
+   person sees, what they can override, what gets logged.
+5. "replaces_activity" names the current activity this step replaces, copied EXACTLY from the
+   CURRENT ACTIVITIES list, or an empty string for a genuinely new step.
+6. Where the change affects how long the step takes, say so in "cycle_time_note", in plain terms.
+7. Do not eliminate a step that produces a required record, an approval or an audit trail. Redesign
+   who does it, not whether it happens.
+
+Part two — "ai_interventions": one entry for every future step that differs from today, explaining
+the change.
+8. "future_activity_name" must match a name from part one EXACTLY.
+9. "related_ai_opportunity_description" must copy the EXACT description text of the opportunity that
+   justifies the change, so the two can be linked. Leave it empty only for a change that no
+   opportunity above motivated.
+10. intervention_type: NEW for a step with no equivalent today, ELIMINATE for work that disappears,
+    AUTOMATE when AI takes the step over, AUGMENT when AI assists a person.
+
+Return STRICT JSON ONLY, no markdown fences, no commentary:
+{
+  "future_activities": [
+    {
+      "sequence_order": 1,
+      "name": "name of the future step",
+      "description": "what happens in this step",
+      "human_responsibility": "what a person is accountable for",
+      "ai_responsibility": "what the AI does, or empty if none",
+      "responsibility_type": "AI_AUTOMATED | AI_AUGMENTED | HUMAN_LED",
+      "handoff_note": "how work passes between person and system",
+      "failure_mode": "what happens when the AI is wrong or unavailable",
+      "replaces_activity": "exact current activity name, or empty string",
+      "cycle_time_note": "effect on how long this takes"
+    }
+  ],
+  "ai_interventions": [
+    {
+      "future_activity_name": "exact name from future_activities",
+      "related_ai_opportunity_description": "exact description text of the opportunity",
+      "intervention_type": "AUTOMATE | AUGMENT | ELIMINATE | NEW",
+      "description": "what specifically changed relative to today"
+    }
+  ]
+}

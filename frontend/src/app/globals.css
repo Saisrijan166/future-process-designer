@@ -1,92 +1,346 @@
 @import "tailwindcss";
 
-/*
- * Design tokens.
+/* =============================================================================
+ * DESIGN TOKENS
  *
- * Colour is split by JOB, so nothing has to be guessed at a glance:
- *   ink      — surfaces, borders, text
- *   brand    — navigation and links only
- *   action   — primary buttons are near-black, so no accent hue competes with data
- *   viz      — data marks only. Two ordinal ramps, both validated against a white
- *              surface (monotone lightness, ≥0.06 ΔL between steps, light end ≥2:1).
- *   status   — good / warning / serious / critical, never reused as a data series,
- *              and always paired with a text label so colour never carries meaning alone.
+ * Two rules govern everything below.
  *
- * The two data ramps are one hue each, light→dark, because both scales they encode
- * are ordered: human→AI involvement, and low→high automation potential. Two
- * sequential contexts appear together, so the second takes a different hue.
- */
-@theme {
-  /* ---- neutrals ---- */
-  --color-ink-50: #f8fafc;
-  --color-ink-100: #f1f5f9;
-  --color-ink-200: #e2e8f0;
-  --color-ink-300: #cbd5e1;
-  --color-ink-400: #94a3b8;
-  --color-ink-500: #64748b;
-  --color-ink-600: #475569;
-  --color-ink-700: #334155;
-  --color-ink-800: #1e293b;
-  --color-ink-900: #0f172a;
-  --color-ink-950: #020617;
+ * 1. Colour is assigned by JOB, never by taste. Surfaces, text and borders come
+ *    from one neutral ramp; navigation and focus come from one brand hue; data
+ *    marks come from validated data ramps that nothing else may use; status
+ *    comes from four fixed colours that never appear as a data series.
+ *
+ * 2. Every data colour is computed, not chosen. The categorical slots, the two
+ *    ordinal ramps and the status set were each run through the palette
+ *    validator in BOTH modes: monotone lightness with >= 0.06 dL between ordinal
+ *    steps, light end >= 2:1 against its own surface, chroma floor, and adjacent
+ *    CVD separation >= 8 dE. Dark is a re-stepped set validated against the dark
+ *    surface, not an automatic inversion of light.
+ *
+ * The consequence for anyone editing this file: adding a colour to the viz
+ * ramps means re-running the validator, not picking something that looks right.
+ * ========================================================================== */
 
-  /* ---- brand: navigation, links, focus. Never a data mark. ---- */
+@theme {
+  /* ---- neutral ramp: surfaces, borders, text -------------------------- */
+  --color-ink-0: #ffffff;
+  --color-ink-50: #fcfcfb;
+  --color-ink-100: #f5f5f3;
+  --color-ink-150: #eeeeeb;
+  --color-ink-200: #e4e4e0;
+  --color-ink-300: #d2d2cc;
+  --color-ink-400: #a8a8a1;
+  --color-ink-500: #7c7b74;
+  --color-ink-600: #52514e;
+  --color-ink-700: #3a3a37;
+  --color-ink-800: #262624;
+  --color-ink-850: #1f1f1e;
+  --color-ink-900: #1a1a19;
+  --color-ink-950: #0b0b0b;
+
+  /* ---- brand: navigation, links, focus, primary action. Never a data mark. */
   --color-brand-50: #eef2ff;
   --color-brand-100: #e0e7ff;
   --color-brand-200: #c7d2fe;
   --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
   --color-brand-500: #6366f1;
   --color-brand-600: #4f46e5;
   --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
   --color-brand-900: #312e81;
 
-  /* ---- viz: human → AI spectrum (blue ordinal, validated) ---- */
-  --color-viz-human: #86b6ef;
-  --color-viz-augmented: #2a78d6;
-  --color-viz-automated: #104281;
-  --color-viz-human-wash: #eaf2fd;
-  --color-viz-automated-wash: #e3ecf8;
+  /* ---- categorical data slots, in fixed order. Never cycled, never reordered.
+   *      Adjacent pairs validated for CVD separation in both modes. Slots past
+   *      the third are for adjacent forms (stacks, bars) only; all-pairs forms
+   *      (scatter, bubble) cap at three and fold the rest into "other". ---- */
+  --color-cat-1: #2a78d6;
+  --color-cat-2: #eb6834;
+  --color-cat-3: #1baf7a;
+  --color-cat-4: #eda100;
+  --color-cat-5: #e87ba4;
+  --color-cat-6: #008300;
+  --color-cat-7: #4a3aa7;
+  --color-cat-8: #e34948;
 
-  /* ---- viz: automation potential (orange ordinal, validated) ---- */
-  --color-viz-auto-low: #e39158;
-  --color-viz-auto-medium: #d2621f;
-  --color-viz-auto-high: #8f3810;
-  --color-viz-auto-track: #f6e6da;
+  /* ---- ordinal: human -> AI responsibility. One hue, light to dark, because
+   *      the scale it encodes is ordered. ---- */
+  --color-resp-human: #86b6ef;
+  --color-resp-augmented: #2a78d6;
+  --color-resp-automated: #104281;
+  --color-resp-track: #e8f0fb;
 
-  /* ---- status: always shipped with a label ---- */
+  /* ---- ordinal: automation potential. A second ordered scale appears beside
+   *      the first, so it takes the next hue rather than a second blue. ---- */
+  --color-auto-low: #e39158;
+  --color-auto-medium: #d2621f;
+  --color-auto-high: #8f3810;
+  --color-auto-track: #f7e9de;
+
+  /* ---- sequential: continuous magnitude (heatmaps, credibility) ---- */
+  --color-seq-100: #cde2fb;
+  --color-seq-250: #86b6ef;
+  --color-seq-400: #3987e5;
+  --color-seq-550: #1c5cab;
+  --color-seq-700: #0d366b;
+
+  /* ---- status: always shipped with an icon or a label, never colour alone.
+   *      Deliberately distinct from every categorical slot. ---- */
   --color-status-good: #0ca30c;
   --color-status-warning: #fab219;
   --color-status-serious: #ec835a;
   --color-status-critical: #d03b3b;
   --color-status-good-ink: #046004;
   --color-status-warning-ink: #7a5300;
+  --color-status-serious-ink: #96421c;
   --color-status-critical-ink: #8f1f1f;
 
   /* ---- chart chrome ---- */
-  --color-grid: #e2e8f0;
-  --color-muted-ink: #64748b;
+  --color-grid: #e4e4e0;
+  --color-axis: #a8a8a1;
 
-  --radius-card: 0.75rem;
+  --radius-card: 0.875rem;
+  --radius-panel: 1.125rem;
+
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
+
+/* =============================================================================
+ * SEMANTIC ROLES
+ *
+ * Components reference roles, never ramp steps, so the light/dark swap happens
+ * once here. Dark values are declared under both the media query and the
+ * data-theme scope: the query covers the operating system's setting, the scope
+ * covers the in-app toggle, and the toggle has to win in both directions.
+ * ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  --surface-page: #f5f5f3;
+  --surface-1: #fcfcfb;
+  --surface-2: #ffffff;
+  --surface-3: #f5f5f3;
+  --surface-inset: #eeeeeb;
+  --surface-inverse: #1a1a19;
+
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #7c7b74;
+  --text-inverse: #fcfcfb;
+  --text-link: #4338ca;
+
+  --border-subtle: #e4e4e0;
+  --border-strong: #d2d2cc;
+  --border-focus: #4f46e5;
+
+  --shadow-card: 0 1px 2px rgb(11 11 11 / 0.05), 0 1px 3px rgb(11 11 11 / 0.04);
+  --shadow-panel: 0 4px 6px -2px rgb(11 11 11 / 0.05), 0 12px 24px -8px rgb(11 11 11 / 0.10);
+  --shadow-pop: 0 8px 16px -4px rgb(11 11 11 / 0.12), 0 24px 48px -12px rgb(11 11 11 / 0.18);
+
+  --chart-surface: #fcfcfb;
+  --chart-grid: #e4e4e0;
+  --chart-axis: #a8a8a1;
+
+  --resp-human: #86b6ef;
+  --resp-augmented: #2a78d6;
+  --resp-automated: #104281;
+  --resp-track: #e8f0fb;
+
+  --auto-low: #e39158;
+  --auto-medium: #d2621f;
+  --auto-high: #8f3810;
+  --auto-track: #f7e9de;
+
+  --seq-100: #cde2fb;
+  --seq-250: #86b6ef;
+  --seq-400: #3987e5;
+  --seq-550: #1c5cab;
+  --seq-700: #0d366b;
+
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+  --cat-6: #008300;
+  --cat-7: #4a3aa7;
+  --cat-8: #e34948;
+
+  --status-good-ink: #046004;
+  --status-warning-ink: #7a5300;
+  --status-serious-ink: #96421c;
+  --status-critical-ink: #8f1f1f;
+  --status-good-wash: #e8f6e8;
+  --status-warning-wash: #fdf3dd;
+  --status-serious-wash: #fdeee7;
+  --status-critical-wash: #fbeaea;
+  --brand-wash: #eef2ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --surface-page: #131312;
+    --surface-1: #1a1a19;
+    --surface-2: #202020;
+    --surface-3: #262624;
+    --surface-inset: #131312;
+    --surface-inverse: #fcfcfb;
+
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #97968d;
+    --text-inverse: #0b0b0b;
+    --text-link: #a5b4fc;
+
+    --border-subtle: #33332f;
+    --border-strong: #45443f;
+    --border-focus: #818cf8;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-panel: 0 4px 8px -2px rgb(0 0 0 / 0.5), 0 16px 32px -12px rgb(0 0 0 / 0.6);
+    --shadow-pop: 0 8px 16px -4px rgb(0 0 0 / 0.55), 0 32px 64px -16px rgb(0 0 0 / 0.7);
+
+    --chart-surface: #1a1a19;
+    --chart-grid: #33332f;
+    --chart-axis: #6b6a63;
+
+    /* Re-stepped for the dark surface and validated as their own set. */
+    --resp-human: #9ec5f4;
+    --resp-augmented: #3987e5;
+    --resp-automated: #184f95;
+    --resp-track: #21293a;
+
+    --auto-low: #f0a97a;
+    --auto-medium: #e5762f;
+    --auto-high: #b04a17;
+    --auto-track: #33251c;
+
+    --seq-100: #21293a;
+    --seq-250: #1c5cab;
+    --seq-400: #3987e5;
+    --seq-550: #6da7ec;
+    --seq-700: #9ec5f4;
+
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
+    --cat-5: #d55181;
+    --cat-6: #008300;
+    --cat-7: #9085e9;
+    --cat-8: #e66767;
+
+    --status-good-ink: #5ec95e;
+    --status-warning-ink: #fab219;
+    --status-serious-ink: #ec835a;
+    --status-critical-ink: #f07272;
+    --status-good-wash: #14261a;
+    --status-warning-wash: #2b2413;
+    --status-serious-wash: #2e211a;
+    --status-critical-wash: #2e1a1a;
+    --brand-wash: #1e1d3a;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-page: #131312;
+  --surface-1: #1a1a19;
+  --surface-2: #202020;
+  --surface-3: #262624;
+  --surface-inset: #131312;
+  --surface-inverse: #fcfcfb;
+
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #97968d;
+  --text-inverse: #0b0b0b;
+  --text-link: #a5b4fc;
+
+  --border-subtle: #33332f;
+  --border-strong: #45443f;
+  --border-focus: #818cf8;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-panel: 0 4px 8px -2px rgb(0 0 0 / 0.5), 0 16px 32px -12px rgb(0 0 0 / 0.6);
+  --shadow-pop: 0 8px 16px -4px rgb(0 0 0 / 0.55), 0 32px 64px -16px rgb(0 0 0 / 0.7);
+
+  --chart-surface: #1a1a19;
+  --chart-grid: #33332f;
+  --chart-axis: #6b6a63;
+
+  --resp-human: #9ec5f4;
+  --resp-augmented: #3987e5;
+  --resp-automated: #184f95;
+  --resp-track: #21293a;
+
+  --auto-low: #f0a97a;
+  --auto-medium: #e5762f;
+  --auto-high: #b04a17;
+  --auto-track: #33251c;
+
+  --seq-100: #21293a;
+  --seq-250: #1c5cab;
+  --seq-400: #3987e5;
+  --seq-550: #6da7ec;
+  --seq-700: #9ec5f4;
+
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
+  --cat-6: #008300;
+  --cat-7: #9085e9;
+  --cat-8: #e66767;
+
+  --status-good-ink: #5ec95e;
+  --status-warning-ink: #fab219;
+  --status-serious-ink: #ec835a;
+  --status-critical-ink: #f07272;
+  --status-good-wash: #14261a;
+  --status-warning-wash: #2b2413;
+  --status-serious-wash: #2e211a;
+  --status-critical-wash: #2e1a1a;
+  --brand-wash: #1e1d3a;
+}
+
+/* Expose the semantic roles to Tailwind utilities, so `bg-surface-2`,
+ * `text-secondary` and `border-subtle` work alongside the ramps. */
+@theme inline {
+  --color-surface-page: var(--surface-page);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-inset: var(--surface-inset);
+  --color-surface-inverse: var(--surface-inverse);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-inverse: var(--text-inverse);
+  --color-link: var(--text-link);
+  --color-subtle: var(--border-subtle);
+  --color-strong: var(--border-strong);
+  --color-brand-wash: var(--brand-wash);
+}
+
+/* =============================================================================
+ * BASE
+ * ========================================================================== */
 
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
 }
 
-body {
-  background-color: var(--color-ink-50);
-  color: var(--color-ink-800);
-  -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-}
-
-/* Numbers that sit in columns must align; standalone display figures must not. */
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {
@@ -96,14 +350,136 @@ body {
   }
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-brand-600);
-  outline-offset: 2px;
-  border-radius: 0.375rem;
+body {
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-/* A quiet entrance for content that arrives after a fetch, so results do not snap in. */
-@keyframes rise {
+/* One focus treatment everywhere, visible on every surface in both modes. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--brand-wash);
+  color: var(--text-primary);
+}
+
+/* Scrollbars that do not fight the dark surface. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* =============================================================================
+ * COMPONENT PRIMITIVES
+ * ========================================================================== */
+
+.panel {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.panel-quiet {
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+/* Small-caps label used for every section heading and table header. */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  font-variant-ligatures: none;
+}
+
+/* A quote shown as evidence. The left rule is what distinguishes the source's
+ * own words from the application's summary of them, at a glance. */
+.quote {
+  border-left: 3px solid var(--seq-400);
+  background: var(--surface-3);
+  padding: 0.625rem 0.875rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.quote-unverified {
+  border-left-color: var(--status-warning);
+  background: var(--status-warning-wash);
+}
+
+/* The footnote marker beside a generated claim. */
+.citation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.25rem;
+  margin: 0 0.0625rem;
+  border-radius: 4px;
+  background: var(--brand-wash);
+  color: var(--text-link);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.citation:hover {
+  background: var(--border-focus);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.citation-unverified {
+  background: var(--status-warning-wash);
+  color: var(--status-warning-ink);
+}
+
+/* =============================================================================
+ * MOTION
+ *
+ * Used only where something genuinely arrives: a stage completing, a source
+ * appearing in the live console. Never on page load for its own sake.
+ * ========================================================================== */
+
+@keyframes rise-in {
   from {
     opacity: 0;
     transform: translateY(4px);
@@ -114,20 +490,87 @@ body {
   }
 }
 
-.animate-rise {
-  animation: rise 0.28s ease-out both;
+.rise-in {
+  animation: rise-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Indeterminate progress for the analysis run. */
-@keyframes sweep {
+@keyframes pulse-ring {
   0% {
-    transform: translateX(-100%);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--border-focus) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
   }
   100% {
-    transform: translateX(300%);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 
-.animate-sweep {
-  animation: sweep 1.6s ease-in-out infinite;
+.pulse-ring {
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-3) 25%,
+    var(--surface-inset) 37%,
+    var(--surface-3) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* =============================================================================
+ * PRINT
+ *
+ * The analysis is a document people will want on paper or in a PDF, so it is
+ * laid out for that rather than screenshotted: chrome removed, links resolved,
+ * pages broken between sections instead of through them.
+ * ========================================================================== */
+
+@media print {
+  :root {
+    --surface-page: #ffffff;
+    --surface-1: #ffffff;
+    --surface-2: #ffffff;
+    --surface-3: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .panel,
+  .panel-quiet {
+    box-shadow: none;
+    border-color: #cccccc;
+    break-inside: avoid;
+  }
+
+  .print-break-before {
+    break-before: page;
+  }
+
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.7em;
+    color: #555555;
+    word-break: break-all;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
 }

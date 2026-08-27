@@ -1,195 +1,74 @@
+"use client";
+
 import Link from "next/link";
-import type { ReactNode } from "react";
-import type { Tone } from "@/lib/format";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 /**
- * Badge tones map onto the reserved status palette where they mean state
- * (severity, run outcome) and onto neutral ink where they mean identity. Every badge
- * renders its own text, so colour never has to carry the meaning by itself.
+ * The primitives everything else is built from.
+ *
+ * <p>Hand-written rather than pulled from a component library, for a reason that shows up in the
+ * result: this interface has an unusual job — presenting generated claims next to the evidence for
+ * them — and its most-used components are ones no library ships. A citation chip that opens the
+ * quote it refers to, a verification badge, a score meter that reads as a measurement rather than a
+ * gauge. Those had to be built anyway, and building the surrounding buttons and cards to match is
+ * cheaper than reconciling two visual systems.
  */
-const TONE_CLASSES: Record<Tone, string> = {
-  neutral: "bg-ink-100 text-ink-700 ring-ink-200",
-  info: "bg-viz-automated-wash text-viz-augmented ring-viz-augmented/25",
-  success: "bg-emerald-50 text-status-good-ink ring-emerald-200",
-  warning: "bg-amber-50 text-status-warning-ink ring-amber-200",
-  danger: "bg-rose-50 text-status-critical-ink ring-rose-200",
-  accent: "bg-brand-50 text-brand-700 ring-brand-200",
-};
 
-export function Badge({
-  children,
-  tone = "neutral",
-  title,
-}: {
-  children: ReactNode;
-  tone?: Tone;
-  title?: string;
-}) {
-  return (
-    <span
-      title={title}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset ${TONE_CLASSES[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
+// ---------------------------------------------------------------------------
+// Buttons
+// ---------------------------------------------------------------------------
 
-export function Card({
-  children,
-  className = "",
-  as: Component = "div",
-}: {
-  children: ReactNode;
-  className?: string;
-  as?: "div" | "section" | "article" | "li";
-}) {
-  return (
-    <Component className={`rounded-xl border border-ink-200 bg-white ${className}`}>
-      {children}
-    </Component>
-  );
-}
-
-export function SectionHeading({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 className="text-base font-semibold text-ink-900">{title}</h2>
-        {description ? (
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-600">{description}</p>
-        ) : null}
-      </div>
-      {action}
-    </div>
-  );
-}
-
-export function Spinner({ className = "size-4" }: { className?: string }) {
-  return (
-    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-90"
-        fill="currentColor"
-        d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
-  );
-}
-
-/** Skeleton rows, so a slow backend reads as "loading" rather than "empty". */
-export function Loading({ label = "Loading…" }: { label?: string }) {
-  return (
-    <div role="status" aria-live="polite" className="space-y-3">
-      <p className="flex items-center gap-2 text-sm text-ink-500">
-        <Spinner className="size-4 text-ink-400" />
-        {label}
-      </p>
-      <div className="space-y-2">
-        {[0, 1, 2].map((row) => (
-          <div
-            key={row}
-            className="relative h-16 overflow-hidden rounded-xl border border-ink-200 bg-white"
-          >
-            <div className="absolute inset-y-0 -left-1/3 w-1/3 animate-sweep bg-linear-to-r from-transparent via-ink-100 to-transparent" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function EmptyState({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-dashed border-ink-300 bg-white px-6 py-12 text-center">
-      <p className="text-sm font-semibold text-ink-800">{title}</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">{description}</p>
-      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
-    </div>
-  );
-}
-
-export function ErrorPanel({
-  title = "Something went wrong",
-  message,
-  detail,
-  onRetry,
-}: {
-  title?: string;
-  message: string;
-  detail?: string;
-  onRetry?: () => void;
-}) {
-  return (
-    <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-5">
-      <p className="flex items-center gap-2 text-sm font-semibold text-status-critical-ink">
-        <svg className="size-4 shrink-0" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M8 4.75v3.75M8 11.1h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-        {title}
-      </p>
-      <p className="mt-1.5 text-sm text-rose-900">{message}</p>
-      {detail ? (
-        <p className="mt-2 rounded-md bg-white/70 p-2 font-mono text-xs break-words text-rose-800">
-          {detail}
-        </p>
-      ) : null}
-      {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-sm font-medium text-rose-800 transition-colors hover:bg-rose-100"
-        >
-          Try again
-        </button>
-      ) : null}
-    </div>
-  );
-}
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonSize = "sm" | "md" | "lg";
 
 const BUTTON_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all " +
+  "disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-px select-none whitespace-nowrap";
 
-/**
- * The primary action is near-black rather than a brand hue. That keeps every
- * saturated colour on the page available for data, so a coloured mark always means
- * something rather than "this is a button".
- */
-const BUTTON_VARIANTS = {
-  primary: "bg-ink-900 text-white hover:bg-ink-800 shadow-xs",
-  secondary: "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50",
-  ghost: "text-ink-600 hover:bg-ink-100 hover:text-ink-900",
-  danger: "border border-rose-300 bg-white text-rose-700 hover:bg-rose-50",
-} as const;
+const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
+  primary:
+    "bg-[var(--surface-inverse)] text-[var(--text-inverse)] hover:opacity-90 shadow-[var(--shadow-card)]",
+  secondary:
+    "bg-[var(--surface-2)] text-[var(--text-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-3)]",
+  ghost: "text-[var(--text-secondary)] hover:bg-[var(--surface-3)] hover:text-[var(--text-primary)]",
+  danger:
+    "bg-[var(--status-critical-wash)] text-[var(--status-critical-ink)] border border-[color-mix(in_oklab,var(--status-critical-ink)_30%,transparent)] hover:bg-[color-mix(in_oklab,var(--status-critical-ink)_15%,var(--status-critical-wash))]",
+};
+
+const BUTTON_SIZES: Record<ButtonSize, string> = {
+  sm: "h-8 px-3 text-xs",
+  md: "h-9.5 px-4 text-sm",
+  lg: "h-11 px-5 text-sm",
+};
 
 export function Button({
-  children,
-  variant = "primary",
+  variant = "secondary",
+  size = "md",
   className = "",
+  loading = false,
+  children,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: keyof typeof BUTTON_VARIANTS;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
 }) {
   return (
-    <button {...props} className={`${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${className}`}>
+    <button
+      {...props}
+      disabled={props.disabled || loading}
+      className={`${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${BUTTON_SIZES[size]} ${className}`}
+    >
+      {loading ? <Spinner className="size-3.5" /> : null}
       {children}
     </button>
   );
@@ -197,28 +76,540 @@ export function Button({
 
 export function ButtonLink({
   href,
-  children,
-  variant = "primary",
+  variant = "secondary",
+  size = "md",
   className = "",
-}: {
-  href: string;
-  children: ReactNode;
-  variant?: keyof typeof BUTTON_VARIANTS;
-  className?: string;
-}) {
+  children,
+  ...props
+}: React.ComponentProps<typeof Link> & { variant?: ButtonVariant; size?: ButtonSize }) {
   return (
-    <Link href={href} className={`${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${className}`}>
+    <Link
+      href={href}
+      {...props}
+      className={`${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${BUTTON_SIZES[size]} ${className}`}
+    >
       {children}
     </Link>
   );
 }
 
+export function Spinner({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg className={`${className} animate-spin`} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+      <path d="M14.5 8A6.5 6.5 0 0 0 8 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Surfaces
+// ---------------------------------------------------------------------------
+
+export function Panel({
+  children,
+  className = "",
+  quiet = false,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & { quiet?: boolean }) {
+  return (
+    <div {...props} className={`${quiet ? "panel-quiet" : "panel"} ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+export function SectionHeading({
+  title,
+  hint,
+  action,
+  id,
+}: {
+  title: string;
+  hint?: ReactNode;
+  action?: ReactNode;
+  id?: string;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        <h2 id={id} className="text-[0.9375rem] font-semibold text-[var(--text-primary)]">
+          {title}
+        </h2>
+        {hint ? <p className="mt-0.5 text-xs text-[var(--text-muted)]">{hint}</p> : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Badges
+// ---------------------------------------------------------------------------
+
+export type Tone = "neutral" | "brand" | "good" | "warning" | "serious" | "critical" | "info";
+
+const TONE_STYLES: Record<Tone, string> = {
+  neutral:
+    "bg-[var(--surface-3)] text-[var(--text-secondary)] border-[var(--border-subtle)]",
+  brand: "bg-[var(--brand-wash)] text-[var(--text-link)] border-[color-mix(in_oklab,var(--text-link)_25%,transparent)]",
+  good: "bg-[var(--status-good-wash)] text-[var(--status-good-ink)] border-[color-mix(in_oklab,var(--status-good-ink)_25%,transparent)]",
+  warning:
+    "bg-[var(--status-warning-wash)] text-[var(--status-warning-ink)] border-[color-mix(in_oklab,var(--status-warning-ink)_25%,transparent)]",
+  serious:
+    "bg-[var(--status-serious-wash)] text-[var(--status-serious-ink)] border-[color-mix(in_oklab,var(--status-serious-ink)_25%,transparent)]",
+  critical:
+    "bg-[var(--status-critical-wash)] text-[var(--status-critical-ink)] border-[color-mix(in_oklab,var(--status-critical-ink)_25%,transparent)]",
+  info: "bg-[color-mix(in_oklab,var(--seq-400)_12%,transparent)] text-[var(--text-primary)] border-[color-mix(in_oklab,var(--seq-400)_30%,transparent)]",
+};
+
+/**
+ * A label with a tone.
+ *
+ * <p>Status tones always carry their own text, never colour alone — the same rule the charts
+ * follow, applied here because a badge is the smallest place it is tempting to break it.
+ */
+export function Badge({
+  tone = "neutral",
+  children,
+  icon,
+  className = "",
+  title,
+}: {
+  tone?: Tone;
+  children: ReactNode;
+  icon?: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[0.6875rem] font-medium ${TONE_STYLES[tone]} ${className}`}
+    >
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+/** A dot plus a word. Used where a badge would be too heavy, e.g. in a dense table. */
+export function StatusDot({ tone, label }: { tone: Tone; label: string }) {
+  const colour: Record<Tone, string> = {
+    neutral: "var(--text-muted)",
+    brand: "var(--text-link)",
+    good: "var(--status-good)",
+    warning: "var(--status-warning)",
+    serious: "var(--status-serious)",
+    critical: "var(--status-critical)",
+    info: "var(--seq-400)",
+  };
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+      <span
+        className="size-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: colour[tone] }}
+        aria-hidden="true"
+      />
+      {label}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feedback
+// ---------------------------------------------------------------------------
+
+export function ErrorPanel({
+  title,
+  message,
+  onRetry,
+  detail,
+}: {
+  title: string;
+  message: string;
+  onRetry?: () => void;
+  detail?: string | null;
+}) {
+  return (
+    <div
+      role="alert"
+      className="rounded-[var(--radius-card)] border border-[color-mix(in_oklab,var(--status-critical-ink)_30%,transparent)] bg-[var(--status-critical-wash)] p-4"
+    >
+      <div className="flex items-start gap-3">
+        <svg viewBox="0 0 20 20" className="mt-0.5 size-4 shrink-0" aria-hidden="true">
+          <circle cx="10" cy="10" r="8.25" fill="none" stroke="var(--status-critical)" strokeWidth="1.5" />
+          <path d="M10 6v5" stroke="var(--status-critical)" strokeWidth="1.75" strokeLinecap="round" />
+          <circle cx="10" cy="14" r="0.9" fill="var(--status-critical)" />
+        </svg>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-[var(--status-critical-ink)]">{title}</p>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">{message}</p>
+          {detail ? (
+            <p className="mono mt-2 rounded bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">{detail}</p>
+          ) : null}
+          {onRetry ? (
+            <Button size="sm" onClick={onRetry} className="mt-3">
+              Try again
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function EmptyState({
+  title,
+  message,
+  action,
+  icon,
+}: {
+  title: string;
+  message: string;
+  action?: ReactNode;
+  icon?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-[var(--border-strong)] px-6 py-12 text-center">
+      {icon ? <div className="mb-3 text-[var(--text-muted)]">{icon}</div> : null}
+      <p className="text-sm font-semibold text-[var(--text-primary)]">{title}</p>
+      <p className="mt-1 max-w-md text-sm text-[var(--text-secondary)]">{message}</p>
+      {action ? <div className="mt-4">{action}</div> : null}
+    </div>
+  );
+}
+
+export function Loading({ label = "Loading" }: { label?: string }) {
+  return (
+    <div className="flex items-center gap-2 py-8 text-sm text-[var(--text-muted)]">
+      <Spinner />
+      {label}
+    </div>
+  );
+}
+
+export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
+  return <div className={`skeleton ${className}`} aria-hidden="true" />;
+}
+
+// ---------------------------------------------------------------------------
+// Toasts
+// ---------------------------------------------------------------------------
+
+interface Toast {
+  id: number;
+  tone: Tone;
+  title: string;
+  message?: string;
+}
+
+const ToastContext = createContext<{ push: (toast: Omit<Toast, "id">) => void } | null>(null);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const nextId = useRef(1);
+
+  const push = useCallback((toast: Omit<Toast, "id">) => {
+    const id = nextId.current++;
+    setToasts((current) => [...current, { ...toast, id }]);
+    // Long enough to read a two-line message, short enough not to stack up during a run.
+    window.setTimeout(() => setToasts((current) => current.filter((entry) => entry.id !== id)), 6000);
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ push }}>
+      {children}
+      <div
+        className="no-print pointer-events-none fixed bottom-4 right-4 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
+        role="status"
+        aria-live="polite"
+      >
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="rise-in pointer-events-auto rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3 shadow-[var(--shadow-pop)]"
+          >
+            <div className="flex items-start gap-2">
+              <Badge tone={toast.tone}>{toast.tone === "critical" ? "Failed" : "Done"}</Badge>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-[var(--text-primary)]">{toast.title}</p>
+                {toast.message ? (
+                  <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{toast.message}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setToasts((current) => current.filter((entry) => entry.id !== toast.id))}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                aria-label="Dismiss"
+              >
+                <svg viewBox="0 0 12 12" className="size-3" aria-hidden="true">
+                  <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast() {
+  const context = useContext(ToastContext);
+  if (!context) {
+    // A no-op rather than a throw: a component rendered outside the provider in a test should not
+    // fail because of a notification it does not care about.
+    return { push: () => {} };
+  }
+  return context;
+}
+
+// ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+
+export interface TabDefinition {
+  id: string;
+  label: string;
+  count?: number | null;
+  disabled?: boolean;
+}
+
+/**
+ * A scrollable tab strip.
+ *
+ * <p>Counts sit in the tab because they answer "is there anything in there?" before the click. A
+ * tab reading "Risks 9" and one reading "Risks" are different invitations.
+ */
+export function Tabs({
+  tabs,
+  active,
+  onChange,
+  className = "",
+}: {
+  tabs: TabDefinition[];
+  active: string;
+  onChange: (id: string) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      className={`no-print flex gap-1 overflow-x-auto border-b border-[var(--border-subtle)] ${className}`}
+    >
+      {tabs.map((tab) => {
+        const selected = tab.id === active;
+        return (
+          <button
+            key={tab.id}
+            role="tab"
+            type="button"
+            aria-selected={selected}
+            disabled={tab.disabled}
+            onClick={() => onChange(tab.id)}
+            className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-[0.8125rem] font-medium transition-colors disabled:opacity-40 ${
+              selected
+                ? "text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            }`}
+          >
+            {tab.label}
+            {tab.count != null ? (
+              <span
+                className={`tabular rounded px-1 text-[0.6875rem] ${
+                  selected
+                    ? "bg-[var(--surface-inverse)] text-[var(--text-inverse)]"
+                    : "bg-[var(--surface-3)] text-[var(--text-muted)]"
+                }`}
+              >
+                {tab.count}
+              </span>
+            ) : null}
+            {selected ? (
+              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[var(--surface-inverse)]" />
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Drawer
+// ---------------------------------------------------------------------------
+
+/**
+ * A right-hand panel for detail that would break the reading flow inline.
+ *
+ * <p>Used for the evidence a citation points at. That is the interaction the whole interface turns
+ * on: a reader should be able to check a claim without losing their place in the argument, which is
+ * what a drawer does and a navigation does not.
+ */
+export function Drawer({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+  width = "38rem",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: ReactNode;
+  children: ReactNode;
+  width?: string;
+}) {
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="no-print fixed inset-0 z-40 flex justify-end">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 bg-[color-mix(in_oklab,var(--surface-inverse)_45%,transparent)] backdrop-blur-[2px]"
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        style={{ width: `min(${width}, 100vw)` }}
+        className="rise-in relative flex h-full flex-col border-l border-[var(--border-subtle)] bg-[var(--surface-1)] shadow-[var(--shadow-pop)]"
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-[var(--border-subtle)] px-5 py-4">
+          <div className="min-w-0">
+            <h2 id={titleId} className="text-sm font-semibold text-[var(--text-primary)]">
+              {title}
+            </h2>
+            {subtitle ? <div className="mt-1 text-xs text-[var(--text-muted)]">{subtitle}</div> : null}
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close panel">
+            <svg viewBox="0 0 14 14" className="size-3.5" aria-hidden="true">
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </Button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Disclosure
+// ---------------------------------------------------------------------------
+
+export function Disclosure({
+  summary,
+  children,
+  defaultOpen = false,
+  className = "",
+}: {
+  summary: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className={`group rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-1)] ${className}`}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+        <svg
+          viewBox="0 0 12 12"
+          className="size-3 shrink-0 transition-transform group-open:rotate-90"
+          aria-hidden="true"
+        >
+          <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        </svg>
+        {summary}
+      </summary>
+      <div className="border-t border-[var(--border-subtle)] px-3 py-3">{children}</div>
+    </details>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Field rendering
+// ---------------------------------------------------------------------------
+
+/**
+ * A labelled field that is honest about being empty.
+ *
+ * <p>The fallback is not decoration. The pipeline asks the model for specific things — what happens
+ * when the AI is wrong, who checks the output — and a step that did not answer should read as a gap
+ * rather than as a field that quietly disappeared.
+ */
 export function Field({
+  label,
+  value,
+  fallback = "Not stated",
+  className = "",
+}: {
+  label: string;
+  value: ReactNode;
+  fallback?: string;
+  className?: string;
+}) {
+  const empty = value == null || value === "";
+  return (
+    <div className={className}>
+      <p className="eyebrow">{label}</p>
+      <div
+        className={`mt-1 text-[0.8125rem] leading-relaxed ${
+          empty ? "italic text-[var(--text-muted)]" : "text-[var(--text-secondary)]"
+        }`}
+      >
+        {empty ? fallback : value}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Forms
+// ---------------------------------------------------------------------------
+
+/** One input style, so every form in the application looks like the same application. */
+export const INPUT_CLASSES =
+  "w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm " +
+  "text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-muted)] " +
+  "focus:border-[var(--border-focus)] disabled:opacity-60";
+
+/**
+ * A labelled form control.
+ *
+ * <p>Distinct from {@link Field}, which displays a value that already exists. This one wraps an
+ * input, wires the label to it, and puts the error where a screen reader will read it with the
+ * field rather than somewhere else on the page.
+ */
+export function FormField({
   label,
   htmlFor,
   hint,
   error,
-  required,
+  required = false,
   children,
 }: {
   label: string;
@@ -230,21 +621,97 @@ export function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-ink-800">
+      <label htmlFor={htmlFor} className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
         {label}
-        {required ? <span className="ml-0.5 text-rose-600">*</span> : null}
+        {required ? <span className="ml-0.5 text-[var(--status-critical-ink)]">*</span> : null}
       </label>
-      {hint ? <p className="mt-0.5 text-xs text-ink-500">{hint}</p> : null}
-      <div className="mt-1.5">{children}</div>
-      {error ? <p className="mt-1 text-xs font-medium text-rose-700">{error}</p> : null}
+      {children}
+      {error ? (
+        <p id={`${htmlFor}-error`} role="alert" className="mt-1 text-xs text-[var(--status-critical-ink)]">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="mt-1 text-[0.6875rem] text-[var(--text-muted)]">{hint}</p>
+      ) : null}
     </div>
   );
 }
 
-export const INPUT_CLASSES =
-  "block w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900 transition-colors placeholder:text-ink-400 focus:border-brand-500 focus:outline-none";
+/** A centred dialog, for a choice that interrupts rather than one that sits alongside. */
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  width = "36rem",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  width?: string;
+}) {
+  const titleId = useId();
 
-export function Text({ value, fallback = "—" }: { value?: string | null; fallback?: string }) {
-  const trimmed = value?.trim();
-  return trimmed ? <>{trimmed}</> : <span className="text-ink-400">{fallback}</span>;
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="no-print fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="fixed inset-0 bg-[color-mix(in_oklab,var(--surface-inverse)_50%,transparent)] backdrop-blur-[2px]"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        style={{ width: `min(${width}, 100%)` }}
+        className="rise-in relative my-auto rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--surface-1)] shadow-[var(--shadow-pop)]"
+      >
+        <header className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-5 py-3.5">
+          <h2 id={titleId} className="text-sm font-semibold">
+            {title}
+          </h2>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+            <svg viewBox="0 0 14 14" className="size-3.5" aria-hidden="true">
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </Button>
+        </header>
+        <div className="px-5 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1600);
+        } catch {
+          // Clipboard access can be refused; the button simply does not confirm.
+        }
+      }}
+    >
+      {copied ? "Copied" : label}
+    </Button>
+  );
 }

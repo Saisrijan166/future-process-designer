@@ -54,6 +54,9 @@ public class OpenAiCompatibleProvider implements AiProvider {
      *
      * @param requiresApiKey a local Ollama needs none; every hosted endpoint does
      * @param supportsExecutedTools whether the host can run tools on its own and report them back
+     * @param apiKeyEnvVar the environment variable to set, named in the "not configured" error.
+     *     A message that says "configure the API key" without saying which variable is a message
+     *     that costs somebody ten minutes.
      * @param keysUrl shown in the "not configured" error, so the fix is one click away
      */
     public record Spec(
@@ -69,6 +72,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
             int maxTransportRetries,
             boolean requiresApiKey,
             boolean supportsExecutedTools,
+            String apiKeyEnvVar,
             String keysUrl) {}
 
     private final Spec spec;
@@ -116,8 +120,11 @@ public class OpenAiCompatibleProvider implements AiProvider {
     public AiCompletion complete(AiRequest request) {
         if (!isConfigured()) {
             throw new AiNotConfiguredException(
-                    "No %s API key configured. Set it and restart the service%s."
-                            .formatted(spec.name(), spec.keysUrl() == null ? "" : " (free key from " + spec.keysUrl() + ")"));
+                    "No %s API key configured. Set the %s environment variable%s and restart the service."
+                            .formatted(
+                                    spec.name(),
+                                    spec.apiKeyEnvVar(),
+                                    spec.keysUrl() == null ? "" : " (free key from " + spec.keysUrl() + ")"));
         }
 
         String model = request.model() == null || request.model().isBlank()
@@ -198,6 +205,15 @@ public class OpenAiCompatibleProvider implements AiProvider {
                             .formatted(label, model, detail),
                     retryAfter);
         }
+        if (status == 400 && looksLikeJsonModeFailure(detail)) {
+            // Groq validates JSON-mode output server-side and returns 400 when it does not parse,
+            // which in practice means the response was truncated at the token ceiling. The gateway
+            // retries without JSON mode, because this application's own parser can repair what the
+            // provider discarded.
+            throw AiProviderException.jsonModeRejected(
+                    "%s rejected its own JSON-mode output on %s (400), most likely truncated: %s"
+                            .formatted(label, model, detail));
+        }
         String message = switch (status) {
             case 400 -> "%s rejected the request (400) on %s: %s".formatted(label, model, detail);
             case 401, 403 -> "%s rejected the API key (%d): %s".formatted(label, status, detail);
@@ -239,6 +255,16 @@ public class OpenAiCompatibleProvider implements AiProvider {
             throw new AiProviderException(
                     "Could not serialise the %s request body".formatted(spec.name()), false, e);
         }
+    }
+
+    private static boolean looksLikeJsonModeFailure(String detail) {
+        if (detail == null) {
+            return false;
+        }
+        String lower = detail.toLowerCase(Locale.ROOT);
+        return lower.contains("json_validate_failed")
+                || lower.contains("failed to validate json")
+                || lower.contains("did not match the expected json");
     }
 
     /** Only the GPT-OSS family accepts this field; others reject the request outright. */

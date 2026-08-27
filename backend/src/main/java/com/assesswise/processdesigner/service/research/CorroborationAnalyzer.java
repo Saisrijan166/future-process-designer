@@ -45,8 +45,23 @@ public class CorroborationAnalyzer {
 
     private static final Logger log = LoggerFactory.getLogger(CorroborationAnalyzer.class);
 
-    /** Below this, two claims are about different things and their relation means nothing. */
-    private static final double SAME_TOPIC_THRESHOLD = 0.55;
+    /**
+     * Below this, two claims are about different things and their relation means nothing.
+     *
+     * <p>Lowered from 0.55 after a live run cross-checked 27 real claims and found zero agreements.
+     * Two sources stating the same fact in their own words share fewer stemmed terms than intuition
+     * suggests — "e-marking cut turnaround by a third" and "digital scoring reduced result release
+     * time by 30%" overlap on almost nothing.
+     */
+    private static final double SAME_TOPIC_THRESHOLD = 0.45;
+
+    /**
+     * A weaker overlap still counts when both claims carry a comparable figure. Two numbers in the
+     * same unit about a similar topic are far more likely to be about the same thing than two
+     * paragraphs of prose with the same term overlap, and this is where corroboration and
+     * contradiction are both most valuable.
+     */
+    private static final double NUMERIC_TOPIC_THRESHOLD = 0.3;
     /** Figures further apart than this, relative to the larger, are treated as disagreeing. */
     private static final double NUMERIC_DIVERGENCE = 0.30;
 
@@ -82,7 +97,18 @@ public class CorroborationAnalyzer {
                 EvidenceClaim right = claims.get(j);
 
                 double similarity = TextSimilarity.overlap(left.getClaimText(), right.getClaimText());
-                if (similarity < SAME_TOPIC_THRESHOLD) {
+                boolean comparableNumbers = left.getNumericValue() != null
+                        && right.getNumericValue() != null
+                        && comparableUnits(left.getNumericUnit(), right.getNumericUnit());
+                double threshold = comparableNumbers ? NUMERIC_TOPIC_THRESHOLD : SAME_TOPIC_THRESHOLD;
+
+                // Topic labels are a second route to the same judgement: two claims the extractor
+                // both tagged "grading turnaround" are about grading turnaround whatever words they
+                // used to say it.
+                boolean sameTopic = left.getTopic() != null && right.getTopic() != null
+                        && TextSimilarity.overlap(left.getTopic(), right.getTopic()) >= 0.6;
+
+                if (similarity < threshold && !sameTopic) {
                     continue;
                 }
                 String leftDomain = left.getSource().getDomain();

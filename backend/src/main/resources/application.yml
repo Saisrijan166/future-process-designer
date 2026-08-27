@@ -73,6 +73,9 @@ app:
     # Comma-separated list. Set APP_CORS_ALLOWED_ORIGINS to the deployed frontend URL.
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
   analysis:
+    # staged = ten stages with live research and an adversarial review; single = the original
+    # one-prompt analysis, which costs one request instead of eight.
+    pipeline: ${ANALYSIS_PIPELINE:staged}
     knowledge-snippet-count: ${ANALYSIS_SNIPPET_COUNT:4}
     rate-limit:
       enabled: ${ANALYSIS_RATE_LIMIT_ENABLED:true}

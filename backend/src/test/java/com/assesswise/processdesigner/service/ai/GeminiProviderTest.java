@@ -124,9 +124,9 @@ class GeminiProviderTest {
         assertThat(request.at("/contents/0/role").asText()).isEqualTo("user");
         assertThat(request.at("/generationConfig/responseMimeType").asText()).isEqualTo("application/json");
         assertThat(request.at("/generationConfig/temperature").asDouble()).isEqualTo(0.2);
-        assertThat(request.at("/generationConfig/responseSchema/type").asText()).isEqualTo("OBJECT");
-        assertThat(request.at("/generationConfig/responseSchema/required"))
-                .hasToString("[\"problems\",\"ai_opportunities\",\"future_activities\",\"ai_interventions\"]");
+        // JSON is requested; its shape is not dictated unless the caller supplies a schema. See
+        // sendsNoSchemaUnlessTheCallerSuppliesOne below for why that distinction matters.
+        assertThat(request.at("/generationConfig/responseSchema").isMissingNode()).isTrue();
         // thinkingBudget is -1 by default, meaning "leave the model default alone" — so it must be absent.
         assertThat(request.at("/generationConfig/thinkingConfig").isMissingNode()).isTrue();
     }
@@ -227,5 +227,52 @@ class GeminiProviderTest {
         assertThat(provider.model()).isEqualTo("gemini-2.5-flash");
         assertThat(provider.isConfigured()).isTrue();
         assertThat(provider("", 1).isConfigured()).isFalse();
+    }
+
+    @Test
+    @DisplayName("sends no response schema unless the caller supplies one")
+    void sendsNoSchemaUnlessTheCallerSuppliesOne() throws Exception {
+        responses.add(new CannedResponse(200, successBody("{\"problems\":[]}")));
+
+        provider("test-key", 1).complete(AiRequest.of("Diagnose this process", "diagnosis"));
+
+        JsonNode request = new ObjectMapper().readTree(receivedBodies.getFirst());
+        // A regression test for a real fault. This provider used to fall back to the single-call
+        // analysis schema whenever a caller did not supply one, which silently forced every stage of
+        // the multi-stage pipeline to answer a different question. Groq served most stages, so it
+        // stayed hidden until a run exhausted Groq's budget, fell through to Gemini, and the
+        // opportunities stage failed twice on a model that had been constrained to the wrong shape.
+        assertThat(request.at("/generationConfig/responseSchema").isMissingNode())
+                .describedAs("no schema may be imposed on a caller that did not ask for one")
+                .isTrue();
+        assertThat(request.at("/generationConfig/responseMimeType").asText()).isEqualTo("application/json");
+    }
+
+    @Test
+    @DisplayName("sends the caller's schema when one is supplied")
+    void sendsTheCallersSchema() throws Exception {
+        responses.add(new CannedResponse(200, successBody("{\"problems\":[]}")));
+
+        provider("test-key", 1).complete(AiRequest.of("Analyse this process", "analyze")
+                .withResponseSchema(AnalysisJsonSchema.build()));
+
+        JsonNode request = new ObjectMapper().readTree(receivedBodies.getFirst());
+        assertThat(request.at("/generationConfig/responseSchema/required"))
+                .hasToString("[\"problems\",\"ai_opportunities\",\"future_activities\",\"ai_interventions\"]");
+    }
+
+    @Test
+    @DisplayName("honours a per-request model and output ceiling, so per-task routing reaches the wire")
+    void honoursPerRequestOverrides() throws Exception {
+        responses.add(new CannedResponse(200, successBody("{\"problems\":[]}")));
+
+        provider("test-key", 1).complete(AiRequest.of("Diagnose", "diagnosis")
+                .withModel("gemini-other-model")
+                .withLimits(0.7, 512));
+
+        assertThat(receivedPaths).containsExactly("/models/gemini-other-model:generateContent");
+        JsonNode request = new ObjectMapper().readTree(receivedBodies.getFirst());
+        assertThat(request.at("/generationConfig/maxOutputTokens").asInt()).isEqualTo(512);
+        assertThat(request.at("/generationConfig/temperature").asDouble()).isEqualTo(0.7);
     }
 }

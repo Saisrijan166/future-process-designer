@@ -47,6 +47,13 @@ public record AppProperties(
             @DefaultValue({"http://localhost:3000"}) List<String> allowedOrigins) {}
 
     public record Analysis(
+            /**
+             * Which pipeline runs: {@code staged} (ten stages, live research, adversarial review) or
+             * {@code single} (the original one-prompt analysis). The single-call path is kept because
+             * it costs one request instead of eight, which is the right trade when a free-tier daily
+             * quota is nearly spent.
+             */
+            @DefaultValue("staged") String pipeline,
             /** How many curated snippets are injected into the prompt as grounding context. */
             @DefaultValue("4") int knowledgeSnippetCount,
             /** Upper bounds applied to model output before it reaches the database. */
@@ -98,11 +105,15 @@ public record AppProperties(
             @DefaultValue("true") boolean cacheEnabled,
             @DefaultValue("72") int cacheTtlHours,
             /**
-             * How long a stage will wait for a model's token bucket to refill before giving up and
-             * trying the next candidate model. Groq's free tier is 8k tokens/minute on most models,
-             * so a short wait is normal and a long one means the pipeline should route elsewhere.
+             * How long a stage will wait for token budget before trying the next candidate model.
+             *
+             * <p>Raised to 60 after watching a run fail for want of five seconds: the shared
+             * per-minute ceiling needed 40 seconds to refill, the 35-second limit skipped both Groq
+             * models, and the stage fell through to a provider that then failed twice. Since the
+             * ceiling refills continuously, a wait just under a minute is always enough for one
+             * request, and waiting is strictly better than losing the stage.
              */
-            @DefaultValue("35") int maxRateLimitWaitSeconds,
+            @DefaultValue("60") int maxRateLimitWaitSeconds,
             @DefaultValue Gemini gemini,
             @DefaultValue Groq groq,
             @DefaultValue OpenAiCompatible cerebras,
@@ -230,17 +241,26 @@ public record AppProperties(
                     })
             List<String> connectors,
             /** How many search queries the planner is allowed to produce for one run. */
-            @DefaultValue("6") int maxQueries,
+            @DefaultValue("5") int maxQueries,
             /** Results kept per connector per query before ranking. */
-            @DefaultValue("6") int hitsPerQuery,
-            /** How many of the highest-ranked hits get fetched in full and read. */
-            @DefaultValue("10") int maxDocuments,
+            @DefaultValue("5") int hitsPerQuery,
+            /**
+             * How many of the highest-ranked hits get fetched in full and read.
+             *
+             * <p>The single biggest lever on how long a run takes, because each document read costs
+             * one or two model calls against an organisation-wide 8,000 tokens-per-minute ceiling. A
+             * measured run at ten documents spent nine minutes in the research stage alone and
+             * produced 27 claims; six documents produce enough evidence to ground an analysis
+             * properly in a fraction of the time. Sources beyond this are still recorded and shown,
+             * with their search snippet, marked as not read.
+             */
+            @DefaultValue("6") int maxDocuments,
             /** Ceiling on extracted claims per run, so one run cannot flood the evidence table. */
-            @DefaultValue("48") int maxClaims,
+            @DefaultValue("24") int maxClaims,
             /** Characters of extracted body text kept per document. */
             @DefaultValue("36000") int maxDocumentChars,
             /** Characters of a document handed to the claim extractor in one call. */
-            @DefaultValue("9000") int extractionChunkChars,
+            @DefaultValue("7000") int extractionChunkChars,
             @DefaultValue("12") int fetchTimeoutSeconds,
             @DefaultValue("6") int fetchConcurrency,
             /** Cached page bodies are reused for this long — the same source in two runs is fetched once. */

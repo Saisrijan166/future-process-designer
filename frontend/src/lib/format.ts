@@ -43,49 +43,70 @@ export function humanise(value: string): string {
     .join(" ");
 }
 
-export type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "accent";
+/**
+ * Re-exported from the UI kit so there is exactly one tone vocabulary.
+ *
+ * <p>There used to be two — a set here and a set in the components — which is how a badge ended up
+ * asking for a colour that did not exist. Importing rather than redeclaring makes that a compile
+ * error instead of a rendering surprise.
+ */
+export type { Tone } from "@/components/ui";
+import type { Tone } from "@/components/ui";
 
+/**
+ * Tones for the enum values, in one place.
+ *
+ * <p>Status tones are reserved and never reused as a category colour, so a severity and a source
+ * type that both read "critical red" would be a bug rather than a coincidence — these maps are
+ * where that rule is kept.
+ */
 export const severityTone: Record<Severity, Tone> = {
   LOW: "neutral",
   MEDIUM: "warning",
-  HIGH: "danger",
+  HIGH: "critical",
 };
 
 export const automationTone: Record<AutomationPotential, Tone> = {
   LOW: "neutral",
   MEDIUM: "info",
-  HIGH: "success",
+  HIGH: "brand",
 };
 
 export const responsibilityTone: Record<ResponsibilityType, Tone> = {
-  AI_AUTOMATED: "accent",
+  AI_AUTOMATED: "brand",
   AI_AUGMENTED: "info",
   HUMAN_LED: "neutral",
 };
 
 export const interventionTone: Record<InterventionType, Tone> = {
-  AUTOMATE: "accent",
+  AUTOMATE: "brand",
   AUGMENT: "info",
-  ELIMINATE: "danger",
-  NEW: "success",
+  ELIMINATE: "warning",
+  NEW: "good",
 };
 
 export const sourceTypeTone: Record<SourceType, Tone> = {
-  LAW: "danger",
+  LAW: "brand",
   GUIDANCE: "info",
-  STANDARD: "accent",
-  RESEARCH: "success",
+  STANDARD: "info",
+  RESEARCH: "good",
+  NEWS: "neutral",
+  ENCYCLOPEDIA: "neutral",
+  PRACTITIONER: "neutral",
   VENDOR: "warning",
   GENERAL_WEB: "neutral",
 };
 
 export const sourceTypeLabel: Record<SourceType, string> = {
   LAW: "Law",
-  GUIDANCE: "Guidance",
+  GUIDANCE: "Official guidance",
   STANDARD: "Standard",
   RESEARCH: "Research",
+  NEWS: "News",
+  ENCYCLOPEDIA: "Encyclopedia",
+  PRACTITIONER: "Practitioner",
   VENDOR: "Vendor",
-  GENERAL_WEB: "General web",
+  GENERAL_WEB: "Web page",
 };
 
 export function hostnameOf(url: string): string {

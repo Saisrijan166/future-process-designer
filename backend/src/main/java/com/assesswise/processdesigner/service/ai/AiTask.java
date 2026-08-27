@@ -36,8 +36,15 @@ public enum AiTask {
      */
     RESEARCH_AGENT("research-agent", 2400, 0.2, 18_000, false),
 
-    /** Turns one fetched page into atomic claims, each with a verbatim quote. High volume. */
-    CLAIM_EXTRACTION("claim-extraction", 2000, 0.1),
+    /**
+     * Turns one fetched page into atomic claims, each with a verbatim quote.
+     *
+     * <p>The highest-volume task by a wide margin — a dozen or more calls in one run — and therefore
+     * the one that decides how long a run takes. Spread across providers for that reason: the free
+     * tier's token ceiling is per organisation, so a second provider is the only real way to run two
+     * of these in the same minute.
+     */
+    CLAIM_EXTRACTION("claim-extraction", 1900, 0.1, 0, true, true),
 
     /** Proposes AI interventions, each required to cite the evidence it rests on. */
     OPPORTUNITIES("opportunities", 3600, 0.25),
@@ -48,14 +55,26 @@ public enum AiTask {
     /** Designs the future-state activity sequence and the human/AI responsibility split. */
     FUTURE_DESIGN("future-design", 4000, 0.25),
 
-    /** Estimates volumes and handling times so the impact model has honest inputs. */
-    QUANTIFICATION("quantification", 2000, 0.1),
+    /**
+     * Estimates volumes and handling times so the impact model has honest inputs.
+     *
+     * <p>Ceiling raised after a live run lost four of five estimates: each entry carries its
+     * assumptions in prose, and the response was being truncated mid-JSON, which the provider then
+     * refused outright rather than returning.
+     */
+    QUANTIFICATION("quantification", 3200, 0.1),
 
     /** Risks, controls and the compliance obligations the research surfaced. */
-    RISK("risk", 2400, 0.2),
+    RISK("risk", 3200, 0.2),
 
-    /** Sequences the interventions into delivery waves. */
-    ROADMAP("roadmap", 2400, 0.2),
+    /**
+     * Sequences the interventions into delivery waves.
+     *
+     * <p>Ceiling raised for the same reason as quantification: one item per intervention plus the
+     * enabling work, each with a description and a success metric, does not fit in 2,400 tokens, and
+     * a truncated JSON array is worth nothing.
+     */
+    ROADMAP("roadmap", 3400, 0.2),
 
     /** Hands a model its own malformed JSON back with the specific complaints. */
     REPAIR("repair", 4000, 0.0),
@@ -68,6 +87,7 @@ public enum AiTask {
     private final double defaultTemperature;
     private final int budgetFloorTokens;
     private final boolean chainFallbackUseful;
+    private final boolean spreadAcrossProviders;
 
     AiTask(String id, int defaultMaxOutputTokens, double defaultTemperature) {
         this(id, defaultMaxOutputTokens, defaultTemperature, 0);
@@ -83,11 +103,22 @@ public enum AiTask {
             double defaultTemperature,
             int budgetFloorTokens,
             boolean chainFallbackUseful) {
+        this(id, defaultMaxOutputTokens, defaultTemperature, budgetFloorTokens, chainFallbackUseful, false);
+    }
+
+    AiTask(
+            String id,
+            int defaultMaxOutputTokens,
+            double defaultTemperature,
+            int budgetFloorTokens,
+            boolean chainFallbackUseful,
+            boolean spreadAcrossProviders) {
         this.id = id;
         this.defaultMaxOutputTokens = defaultMaxOutputTokens;
         this.defaultTemperature = defaultTemperature;
         this.budgetFloorTokens = budgetFloorTokens;
         this.chainFallbackUseful = chainFallbackUseful;
+        this.spreadAcrossProviders = spreadAcrossProviders;
     }
 
     /** Configuration key, e.g. {@code app.ai.routing.claim-extraction}. */
@@ -124,6 +155,17 @@ public enum AiTask {
      */
     public boolean chainFallbackUseful() {
         return chainFallbackUseful;
+    }
+
+    /**
+     * Whether repeated calls should start at a rotating candidate rather than always the first.
+     *
+     * <p>True only for the high-volume tasks. For a once-per-run stage, always starting with the
+     * best model is right; for the fifteenth claim extraction, the best model is whichever one has
+     * budget, and alternating providers is what keeps the run from serialising behind one quota.
+     */
+    public boolean spreadAcrossProviders() {
+        return spreadAcrossProviders;
     }
 
     public static Optional<AiTask> fromId(String value) {

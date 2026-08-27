@@ -42,6 +42,14 @@ public class AiGateway {
     private final TokenBudgetGovernor governor;
     private final AiResponseCache cache;
     private final Duration maxRateLimitWait;
+    /**
+     * Rotates the starting candidate for high-volume tasks, so a run's twenty claim extractions are
+     * spread across providers instead of queueing behind one. This is the only throughput multiplier
+     * that actually works on a free tier whose token ceiling is organisation-wide: a second provider
+     * is a second quota.
+     */
+    private final java.util.concurrent.atomic.AtomicInteger rotation =
+            new java.util.concurrent.atomic.AtomicInteger();
 
     public AiGateway(
             ModelRouter router,
@@ -100,9 +108,13 @@ public class AiGateway {
         }
 
         // Pass two: ask, in order, until one answers.
-        for (int index = 0; index < candidates.size(); index++) {
-            ModelRouter.Candidate candidate = candidates.get(index);
-            boolean isLast = index == candidates.size() - 1;
+        List<ModelRouter.Candidate> ordered = task.spreadAcrossProviders()
+                ? rotate(candidates, rotation.getAndIncrement())
+                : candidates;
+
+        for (int index = 0; index < ordered.size(); index++) {
+            ModelRouter.Candidate candidate = ordered.get(index);
+            boolean isLast = index == ordered.size() - 1;
 
             int estimatedTokens = Math.max(
                     task.budgetFloorTokens(),
@@ -127,7 +139,7 @@ public class AiGateway {
             }
 
             try {
-                AiCompletion completion = candidate.provider().complete(prepared.withModel(candidate.model()));
+                AiCompletion completion = call(candidate, prepared, notes);
                 governor.observeUsage(candidate.provider().name(), candidate.model(),
                         completion.totalTokens(), estimatedTokens);
 
@@ -154,6 +166,45 @@ public class AiGateway {
         throw new AiProviderException(
                 "Every candidate model for '%s' refused or failed. %s".formatted(task.id(), String.join(" | ", notes)),
                 false);
+    }
+
+    /**
+     * Makes the call, with one narrow retry.
+     *
+     * <p>When a provider rejects its own JSON-mode output — which in practice means the response was
+     * truncated at the token ceiling — the same model is asked again with JSON mode switched off.
+     * That is worth doing rather than moving on, because this application parses and repairs JSON
+     * itself and can usually salvage exactly what the provider chose to discard.
+     */
+    private AiCompletion call(ModelRouter.Candidate candidate, AiRequest request, List<String> notes) {
+        try {
+            return candidate.provider().complete(request.withModel(candidate.model()));
+        } catch (AiProviderException e) {
+            if (!e.isJsonModeRejected() || !request.enforceJsonSchema()) {
+                throw e;
+            }
+            notes.add("%s rejected its own JSON-mode output; retried without it".formatted(candidate.key()));
+            log.info("{}: retrying without JSON mode after the provider rejected its own output",
+                    candidate.key());
+            AiRequest relaxed = new AiRequest(
+                    request.prompt(), request.systemPrompt(), request.purpose(), false,
+                    request.responseSchema(), request.temperature(), request.maxOutputTokens(),
+                    candidate.model(), request.reasoningEffort(), false);
+            return candidate.provider().complete(relaxed);
+        }
+    }
+
+    /** Starts the candidate list at a rotating offset, keeping the relative order intact. */
+    private List<ModelRouter.Candidate> rotate(List<ModelRouter.Candidate> candidates, int offset) {
+        if (candidates.size() < 2) {
+            return candidates;
+        }
+        int start = Math.floorMod(offset, candidates.size());
+        List<ModelRouter.Candidate> rotated = new ArrayList<>(candidates.size());
+        for (int index = 0; index < candidates.size(); index++) {
+            rotated.add(candidates.get((start + index) % candidates.size()));
+        }
+        return rotated;
     }
 
     /**

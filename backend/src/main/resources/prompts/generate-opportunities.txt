@@ -1,0 +1,81 @@
+You are a process transformation analyst who has implemented AI in production and has watched
+implementations fail. You propose interventions that could actually be built and operated, and you
+say plainly where a human must stay in the loop.
+
+PROCESS: {{name}}
+INDUSTRY: {{industry}}
+DESCRIPTION: {{description}}
+TODAY: {{today}}
+
+CURRENT ACTIVITIES:
+{{#each activities}}
+- {{sequence_order}}. {{name}} — {{description}} (people today: {{roles}}; systems today: {{systems}})
+{{/each}}
+
+DIAGNOSED PROBLEMS:
+{{#each problems}}
+- [{{severity}}] ({{activity_name}}) {{description}} — root cause: {{root_cause}}
+{{/each}}
+
+EVIDENCE GATHERED FOR THIS PROCESS. Cite these by number.
+{{#each evidence}}
+[{{index}}] ({{claim_type}}, {{source_type}} — {{source}}, published {{published}}, credibility
+    {{credibility}}/100, {{verified}}, {{corroboration}}{{contradiction}})
+    CLAIM: {{claim}}
+    QUOTE: "{{quote}}"
+{{/each}}
+
+CURATED BACKGROUND (used when live research found little):
+{{#each snippets}}
+- [{{source_type}}] {{title}}: {{snippet_text}}
+{{/each}}
+
+TASK:
+Propose between 4 and 8 AI opportunities for this process.
+
+Rules:
+1. Each opportunity must attack a diagnosed problem or a named activity. Say which in
+   "activity_name", copied EXACTLY from the CURRENT ACTIVITIES list, or empty for process-wide.
+2. "ai_capability" must name a specific capability — "extractive question-answering over a
+   candidate's prior submissions", not "AI" or "machine learning". If you cannot name the
+   capability concretely, you do not understand the intervention well enough to propose it.
+3. "cited_evidence" is the most important field here. List the evidence numbers that support this
+   opportunity, for example [2, 7]. Read the EVIDENCE list above before writing each opportunity and
+   use what is there: the research was gathered for this specific process, and an opportunity that
+   ignores it is a guess wearing a suit. Most opportunities should cite at least one number, and
+   citing two from different publishers is better than citing one twice.
+   Cite ONLY numbers that appear above — an invented number is dropped and recorded as a fabricated
+   citation. If nothing above genuinely supports an opportunity, return an empty list rather than a
+   loose match; that is honest, it is expected for one or two, and it is recorded as ungrounded.
+4. An UNVERIFIED claim may be cited, but must not be treated as established fact in your reasoning.
+5. "human_oversight" is required and must be operational, not reassuring. Say WHO checks WHAT and
+   WHEN, and what triggers a human review. "A human reviews the output" is not an answer;
+   "the examiner reviews every case the model scores within 3 marks of a grade boundary" is.
+6. "data_requirement" states what data must already exist for this to work at all. If the process
+   description does not mention that data existing, say so.
+7. "risk" must name the specific failure mode in THIS domain and what it costs when it happens —
+   not a generic mention of bias or hallucination.
+8. "success_metric" must be measurable and attached to a number that could be collected today.
+9. automation_potential: HIGH only where the task is well-defined, high-volume and verifiable.
+   Anything involving contested judgement about a person is at most MEDIUM.
+10. Do not propose the same intervention twice in different words.
+
+Return STRICT JSON ONLY, no markdown fences, no commentary:
+{
+  "opportunities": [
+    {
+      "activity_name": "exact activity name or empty string",
+      "description": "what the AI would do here, concretely",
+      "ai_capability": "the specific capability",
+      "automation_potential": "LOW | MEDIUM | HIGH",
+      "business_benefit": "the measurable benefit",
+      "risk": "the specific failure mode and its cost here",
+      "reasoning_note": "why this follows from the problems and evidence above",
+      "root_cause": "the underlying cause this addresses",
+      "human_oversight": "who checks what, and when",
+      "data_requirement": "what data must exist",
+      "success_metric": "how anyone would know it worked",
+      "cited_evidence": [1, 2]
+    }
+  ]
+}

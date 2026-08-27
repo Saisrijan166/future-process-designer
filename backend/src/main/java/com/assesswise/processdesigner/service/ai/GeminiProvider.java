@@ -160,13 +160,17 @@ public class GeminiProvider implements AiProvider {
         generationConfig.put("maxOutputTokens",
                 request.maxOutputTokens() == null ? config.maxOutputTokens() : request.maxOutputTokens());
         generationConfig.put("responseMimeType", MediaType.APPLICATION_JSON_VALUE);
-        // A caller-supplied schema wins over the built-in analysis schema: the multi-stage pipeline
-        // asks for a different shape at every stage, and constraining stage four's output to stage
-        // ten's schema would fail every time.
+        // Only ever the schema the caller asked for.
+        //
+        // This previously fell back to the single-call analysis schema whenever none was supplied,
+        // which was a real fault with a delayed fuse: every stage of the multi-stage pipeline was
+        // silently constrained to return {problems, ai_opportunities, future_activities,
+        // ai_interventions}. Groq answered most stages so nothing showed - until a run exhausted
+        // Groq's budget, fell through to Gemini, and the opportunities stage failed twice on a model
+        // that had been forced to answer a different question. Asking for JSON without dictating its
+        // shape is the correct default; the local validator judges the result either way.
         if (config.structuredOutput() && request.responseSchema() != null) {
             generationConfig.set("responseSchema", request.responseSchema());
-        } else if (config.structuredOutput() && request.enforceJsonSchema()) {
-            generationConfig.set("responseSchema", AnalysisJsonSchema.build());
         }
         if (config.thinkingBudget() >= 0) {
             generationConfig.putObject("thinkingConfig").put("thinkingBudget", config.thinkingBudget());

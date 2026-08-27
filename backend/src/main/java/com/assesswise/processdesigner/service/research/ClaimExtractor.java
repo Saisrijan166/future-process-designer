@@ -127,7 +127,10 @@ public class ClaimExtractor {
                 break;
             }
             int remaining = maxClaims - claims.size();
-            String prompt = renderPrompt(source, chunk, researchGoal, Math.min(6, remaining));
+            // Four, not six. Each claim carries a quote of up to sixty words, and asking for six
+            // reliably ran the response past its token ceiling: the JSON came back truncated and a
+            // page with plenty to say yielded one usable claim.
+            String prompt = renderPrompt(source, chunk, researchGoal, Math.min(4, remaining));
 
             try {
                 AiCompletion completion = aiGateway.complete(
@@ -139,6 +142,13 @@ public class ClaimExtractor {
 
                 List<ExtractedClaim> parsed = parse(completion.text(), source.text(), remaining);
                 claims.addAll(parsed);
+
+                if (completion.truncated()) {
+                    // Recorded rather than guessed at later: a truncated extraction is the most
+                    // common reason a good source produces one claim instead of four.
+                    notes.add("The model hit its output limit reading this source, so it was only "
+                            + "partly read.");
+                }
 
             } catch (RuntimeException e) {
                 // One chunk failing is not the source failing. Whatever the earlier chunks produced
@@ -236,9 +246,11 @@ public class ClaimExtractor {
             }
             start = Math.max(start + 1, end - CHUNK_OVERLAP_CHARS);
         }
-        // Two chunks is already 6,000 output-token-minutes of budget; a fifteen-page statute is not
-        // read exhaustively, and the run says so rather than pretending otherwise.
-        return chunks.size() > 3 ? chunks.subList(0, 3) : chunks;
+        // Two chunks and no more. Each one is a model call against an organisation-wide token
+        // ceiling, so reading a fifteen-page statute exhaustively would cost the rest of the run.
+        // The first two chunks are where a document states its findings; the run records that the
+        // rest was not read rather than implying it was.
+        return chunks.size() > 2 ? chunks.subList(0, 2) : chunks;
     }
 
     private ClaimType parseClaimType(String raw) {

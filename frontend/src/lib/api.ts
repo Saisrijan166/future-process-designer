@@ -1,14 +1,19 @@
 import type {
+  AiStatus,
   AnalysisResult,
+  AnalysisRunSummary,
+  AnalysisRunTrace,
+  AnalysisStage,
   AuthResponse,
   AuthUser,
-  AnalysisRunTrace,
   Comparison,
   CreateProcessRequest,
   KnowledgeSnippet,
   ProcessDetail,
   ProcessListQuery,
   ProcessPage,
+  ProgressEvent,
+  ResearchRun,
   Role,
   SystemTool,
 } from "./types";
@@ -194,6 +199,17 @@ export const api = {
   getLatestTrace: (id: string) =>
     request<AnalysisRunTrace>(`/api/processes/${id}/analysis-runs/latest/trace`),
 
+  listRuns: (id: string, limit = 10) =>
+    request<AnalysisRunSummary[]>(`/api/processes/${id}/analysis-runs?limit=${limit}`),
+
+  getRunStages: (id: string, runId: string) =>
+    request<AnalysisStage[]>(`/api/processes/${id}/analysis-runs/${runId}/stages`),
+
+  /** The live research behind the stored analysis: queries, sources, and every quoted claim. */
+  getResearch: (id: string) => request<ResearchRun>(`/api/processes/${id}/research`),
+
+  getAiStatus: () => request<AiStatus>("/api/system/ai-status", {}, 15_000),
+
   listKnowledgeSnippets: () => request<KnowledgeSnippet[]>("/api/knowledge-snippets"),
 
   listRoles: () => request<Role[]>("/api/roles"),
@@ -202,3 +218,129 @@ export const api = {
 
   health: () => request<{ status: string }>("/actuator/health", {}, 10_000),
 };
+
+/**
+ * Runs an analysis and reports its progress as it happens.
+ *
+ * <p>Read with `fetch` rather than `EventSource`, for one specific reason: `EventSource` cannot
+ * send an Authorization header, and the usual workaround — the session token in the query string —
+ * writes it into every access log between here and the server. Parsing the SSE framing by hand is
+ * a dozen lines and avoids that entirely.
+ *
+ * <p>The run continues on the server if this connection drops. That is deliberate: the work has
+ * already been paid for out of a free-tier quota, and somebody closing a tab is not a reason to
+ * throw an analysis away. Re-opening the process shows the finished result.
+ *
+ * @param onEvent called for each progress event, in order
+ * @param signal abort to stop listening; the server-side run is unaffected
+ * @returns the same payload as a plain POST /analyze
+ */
+export async function streamAnalysis(
+  processId: string,
+  onEvent: (event: ProgressEvent) => void,
+  signal?: AbortSignal,
+): Promise<AnalysisResult> {
+  const response = await fetch(`${API_BASE_URL}/api/processes/${processId}/analyze/stream`, {
+    method: "POST",
+    headers: {
+      Accept: "text/event-stream",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    signal,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    let problem: ProblemDetail = { title: response.statusText };
+    try {
+      problem = JSON.parse(text) as ProblemDetail;
+    } catch {
+      // A non-JSON error body is still an error; the status carries the meaning.
+    }
+    if (response.status === 401) {
+      auth.setToken(null);
+      onUnauthorized?.();
+    }
+    throw new ApiError(response.status, problem, `The analysis could not be started (${response.status}).`);
+  }
+  if (!response.body) {
+    throw new ApiError(0, { title: "No response body" }, "The progress stream returned nothing.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: AnalysisResult | null = null;
+  let failure: ProblemDetail | null = null;
+
+  // SSE frames are separated by a blank line. Anything before the last separator is complete;
+  // whatever follows is a partial frame and stays in the buffer for the next chunk.
+  const drain = (flush: boolean) => {
+    let separator = buffer.indexOf("\n\n");
+    while (separator !== -1) {
+      handleFrame(buffer.slice(0, separator));
+      buffer = buffer.slice(separator + 2);
+      separator = buffer.indexOf("\n\n");
+    }
+    if (flush && buffer.trim()) {
+      handleFrame(buffer);
+      buffer = "";
+    }
+  };
+
+  const handleFrame = (frame: string) => {
+    let eventName = "message";
+    const dataLines: string[] = [];
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+    if (dataLines.length === 0) {
+      return;
+    }
+    const payload = dataLines.join("\n");
+    try {
+      const parsed = JSON.parse(payload);
+      if (eventName === "result") {
+        result = parsed as AnalysisResult;
+      } else if (eventName === "failed") {
+        failure = { title: parsed.error, detail: parsed.message };
+      } else {
+        onEvent(parsed as ProgressEvent);
+      }
+    } catch {
+      // A frame that is not JSON is a keepalive or a comment; ignoring it is correct.
+    }
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      drain(false);
+    }
+    buffer += decoder.decode();
+    drain(true);
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (failure) {
+    throw new ApiError(500, failure, "The analysis failed.");
+  }
+  if (!result) {
+    throw new ApiError(
+      0,
+      { title: "Incomplete analysis" },
+      "The connection closed before the analysis finished. It may still be running — reopen this process in a moment.",
+    );
+  }
+  return result;
+}

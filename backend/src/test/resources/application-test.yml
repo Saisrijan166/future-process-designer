@@ -12,9 +12,16 @@ app:
     # a scripted provider instead. No live provider is ever constructed during a test run.
     provider: stub
   analysis:
+    # The existing integration tests script one response and assert on one call, so they run the
+    # single-call pipeline. StagedPipelineIntegrationTest sets "staged" explicitly for the other path.
+    pipeline: single
     knowledge-snippet-count: 4
     rate-limit:
       enabled: false
+
+  research:
+    # No test may depend on the internet. LiveResearchSmokeTest uses its own profile for that.
+    enabled: false
 
 logging:
   level:

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { Badge, ButtonLink, ErrorPanel, Loading } from "@/components/ui";
-import { StatTile } from "@/components/viz";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { StatTile } from "@/components/charts";
+import { Badge, Button, ButtonLink, EmptyState, ErrorPanel, Panel, SectionHeading, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
@@ -13,9 +13,15 @@ const PAGE_SIZE = 9;
 
 const FILTERS: { key: string; label: string; status?: ProcessStatus }[] = [
   { key: "all", label: "All" },
-  { key: "analysed", label: "Analysed", status: "ANALYZED" },
-  { key: "pending", label: "Not yet run", status: "CURRENT_ONLY" },
+  { key: "analysed", label: "Analysed" },
+  { key: "pending", label: "Not yet run" },
 ];
+
+const FILTER_STATUS: Record<string, ProcessStatus | undefined> = {
+  all: undefined,
+  analysed: "ANALYZED",
+  pending: "CURRENT_ONLY",
+};
 
 const SORTS: { value: NonNullable<ProcessListQuery["sort"]>; label: string }[] = [
   { value: "recent", label: "Newest first" },
@@ -31,42 +37,45 @@ export default function DashboardPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(0);
 
-  // Debounced so typing does not fire a request per keystroke.
+  // Debounced, so typing does not fire a request per keystroke.
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Changing what is being asked for returns to the first page — otherwise a filter applied while
-  // on page 3 lands the user on an empty page. Done in the handlers rather than an effect, so the
-  // reset happens with the change instead of as a second render pass.
-  function changeFilter(key: string) {
+  // Changing what is being asked for returns to the first page — a filter applied while on page 3
+  // would otherwise land on an empty one. Done in the handlers rather than an effect, so the reset
+  // happens with the change instead of as a second render pass.
+  const changeFilter = (key: string) => {
     setFilter(key);
     setPage(0);
-  }
-
-  function changeSort(next: NonNullable<ProcessListQuery["sort"]>) {
+  };
+  const changeSort = (next: NonNullable<ProcessListQuery["sort"]>) => {
     setSort(next);
     setPage(0);
-  }
-
-  function changeSearch(next: string) {
+  };
+  const changeSearch = (next: string) => {
     setSearch(next);
     setPage(0);
-  }
-
-  const status = FILTERS.find((entry) => entry.key === filter)?.status;
+  };
 
   const load = useCallback(
-    () => api.listProcesses({ page, size: PAGE_SIZE, status, q: debouncedSearch, sort }),
-    [page, status, debouncedSearch, sort],
+    () =>
+      api.listProcesses({
+        page,
+        size: PAGE_SIZE,
+        status: FILTER_STATUS[filter],
+        q: debouncedSearch,
+        sort,
+      }),
+    [page, filter, debouncedSearch, sort],
   );
   const { data: result, error, loading, reload } = useApiResource(load);
 
   const stats = result?.stats;
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-[84rem] space-y-7">
       <Hero />
 
       {error ? (
@@ -79,16 +88,20 @@ export default function DashboardPage() {
           <StatTile
             label="Analysed"
             value={stats.analysed}
-            hint={`${stats.processes - stats.analysed} still to run`}
+            hint={
+              stats.processes - stats.analysed > 0
+                ? `${stats.processes - stats.analysed} still to run`
+                : "every process has been through the pipeline"
+            }
           />
-          <StatTile label="AI ideas found" value={stats.opportunities} />
+          <StatTile label="AI interventions proposed" value={stats.opportunities} />
           <StatTile label="Future steps designed" value={stats.futureActivities} />
         </dl>
       ) : null}
 
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 rounded-lg border border-ink-200 bg-white p-1">
+          <div className="flex gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] p-1">
             {FILTERS.map((entry) => (
               <button
                 key={entry.key}
@@ -97,8 +110,8 @@ export default function DashboardPage() {
                 aria-pressed={filter === entry.key}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   filter === entry.key
-                    ? "bg-ink-900 text-white"
-                    : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+                    ? "bg-[var(--surface-inverse)] text-[var(--text-inverse)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
                 }`}
               >
                 {entry.label}
@@ -108,7 +121,7 @@ export default function DashboardPage() {
 
           <div className="relative min-w-56 flex-1 sm:max-w-xs">
             <svg
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-400"
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted)]"
               viewBox="0 0 16 16"
               fill="none"
               aria-hidden="true"
@@ -120,218 +133,126 @@ export default function DashboardPage() {
               type="search"
               value={search}
               onChange={(event) => changeSearch(event.target.value)}
-              placeholder="Search name, industry or description"
+              placeholder="Search by name or industry"
               aria-label="Search processes"
-              className="w-full rounded-lg border border-ink-300 bg-white py-2 pr-3 pl-9 text-sm text-ink-900 transition-colors placeholder:text-ink-400 focus:border-brand-500 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] pl-9 pr-3 text-sm outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)]"
             />
           </div>
 
-          <label className="flex items-center gap-2 text-xs text-ink-500">
-            Sort
-            <select
-              value={sort}
-              onChange={(event) => changeSort(event.target.value as NonNullable<ProcessListQuery["sort"]>)}
-              className="rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none"
-            >
-              {SORTS.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <select
+            value={sort}
+            onChange={(event) => changeSort(event.target.value as NonNullable<ProcessListQuery["sort"]>)}
+            aria-label="Sort processes"
+            className="h-9 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] px-2.5 text-xs text-[var(--text-secondary)] outline-none focus:border-[var(--border-focus)]"
+          >
+            {SORTS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
 
-          <ButtonLink href="/processes/new" variant="secondary" className="ml-auto">
-            + New process
+          <ButtonLink href="/processes/new" variant="primary" size="md" className="ml-auto">
+            New process
           </ButtonLink>
         </div>
 
-        {loading && !result ? <Loading label="Loading processes…" /> : null}
-
-        {result && result.items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-ink-300 bg-white px-6 py-12 text-center">
-            <p className="text-sm font-medium text-ink-800">Nothing matches that</p>
-            <p className="mt-1 text-sm text-ink-500">
-              {debouncedSearch
-                ? `No process matches “${debouncedSearch}”.`
-                : "No process is in this state yet."}
-            </p>
+        {loading && !result ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Panel key={index} className="space-y-3 p-4">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
+                <Skeleton className="h-12 w-full" />
+              </Panel>
+            ))}
           </div>
-        ) : null}
+        ) : result && result.items.length === 0 ? (
+          <EmptyState
+            title={debouncedSearch ? "Nothing matched that search" : "No processes yet"}
+            message={
+              debouncedSearch
+                ? "Try a different word, or clear the search to see everything."
+                : "Describe a process as it runs today and the pipeline will research it and design its AI-enabled future state."
+            }
+            action={<ButtonLink href="/processes/new" variant="primary">Describe a process</ButtonLink>}
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {result?.items.map((process) => (
+              <ProcessCard key={process.id} process={process} />
+            ))}
+          </div>
+        )}
 
-        {result && result.items.length > 0 ? (
-          <>
-            <ul className="animate-rise grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {result.items.map((process) => (
-                <ProcessCard key={process.id} process={process} />
-              ))}
-            </ul>
-
-            <Pager
-              page={result.page}
-              totalPages={result.totalPages}
-              totalItems={result.totalItems}
-              size={result.size}
-              hasPrevious={result.hasPrevious}
-              hasNext={result.hasNext}
-              busy={loading}
-              onChange={setPage}
-            />
-          </>
+        {result && result.totalPages > 1 ? (
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <p className="text-xs text-[var(--text-muted)]">
+              Page {result.page + 1} of {result.totalPages} · {result.totalItems} processes
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={!result.hasPrevious} onClick={() => setPage((value) => value - 1)}>
+                Previous
+              </Button>
+              <Button size="sm" disabled={!result.hasNext} onClick={() => setPage((value) => value + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
         ) : null}
       </div>
     </div>
   );
 }
 
-/**
- * Paging controls.
- *
- * Page numbers are shown rather than only prev/next, because "where am I in the list" is the
- * question a pager exists to answer. Beyond seven pages the middle collapses to an ellipsis so the
- * control keeps a fixed width.
- */
-function Pager({
-  page,
-  totalPages,
-  totalItems,
-  size,
-  hasPrevious,
-  hasNext,
-  busy,
-  onChange,
-}: {
-  page: number;
-  totalPages: number;
-  totalItems: number;
-  size: number;
-  hasPrevious: boolean;
-  hasNext: boolean;
-  busy: boolean;
-  onChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) {
-    return (
-      <p className="text-xs text-ink-500">
-        Showing all {totalItems} process{totalItems === 1 ? "" : "es"}.
-      </p>
-    );
-  }
-
-  const firstRow = page * size + 1;
-  const lastRow = Math.min((page + 1) * size, totalItems);
-
-  const pages: (number | "gap")[] = [];
-  for (let index = 0; index < totalPages; index += 1) {
-    const nearEdge = index === 0 || index === totalPages - 1;
-    const nearCurrent = Math.abs(index - page) <= 1;
-    if (nearEdge || nearCurrent) {
-      pages.push(index);
-    } else if (pages.at(-1) !== "gap") {
-      pages.push("gap");
-    }
-  }
-
-  const buttonClass =
-    "grid size-8 place-items-center rounded-lg border text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
-
-  return (
-    <nav
-      className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-200 pt-4"
-      aria-label="Process list pages"
-    >
-      <p className="tabular text-xs text-ink-500">
-        Showing {firstRow}–{lastRow} of {totalItems}
-      </p>
-
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onChange(page - 1)}
-          disabled={!hasPrevious || busy}
-          aria-label="Previous page"
-          className={`${buttonClass} border-ink-300 bg-white text-ink-700 hover:bg-ink-50`}
-        >
-          ‹
-        </button>
-
-        {pages.map((entry, index) =>
-          entry === "gap" ? (
-            <span key={`gap-${index}`} className="px-1 text-xs text-ink-400" aria-hidden="true">
-              …
-            </span>
-          ) : (
-            <button
-              key={entry}
-              type="button"
-              onClick={() => onChange(entry)}
-              disabled={busy}
-              aria-label={`Page ${entry + 1}`}
-              aria-current={entry === page ? "page" : undefined}
-              className={`${buttonClass} ${
-                entry === page
-                  ? "border-ink-900 bg-ink-900 text-white"
-                  : "border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
-              }`}
-            >
-              {entry + 1}
-            </button>
-          ),
-        )}
-
-        <button
-          type="button"
-          onClick={() => onChange(page + 1)}
-          disabled={!hasNext || busy}
-          aria-label="Next page"
-          className={`${buttonClass} border-ink-300 bg-white text-ink-700 hover:bg-ink-50`}
-        >
-          ›
-        </button>
-      </div>
-    </nav>
-  );
-}
-
 function Hero() {
   return (
-    <section className="overflow-hidden rounded-2xl border border-ink-200 bg-white">
+    <section className="panel overflow-hidden">
       <div className="grid gap-6 p-6 lg:grid-cols-[1.4fr_1fr] lg:p-8">
         <div>
-          <h1 className="text-3xl leading-tight font-semibold tracking-tight text-ink-900">
-            Redesign a business process around AI
+          <Badge tone="brand">Ten-stage pipeline · live research · verified citations</Badge>
+          <h1 className="mt-3 text-2xl font-semibold leading-tight text-[var(--text-primary)] sm:text-3xl">
+            Describe how a process runs today.
+            <br />
+            Get back a redesign you can check.
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-600">
-            Describe how a process works <strong className="text-ink-900">today</strong> — the
-            steps, who does them, what goes wrong. The system finds where AI could genuinely help,
-            then writes out the redesigned process step by step, saying for each one what a person
-            still owns and what the AI does.
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--text-secondary)]">
+            Every analysis searches the live web across eleven free public sources, reads the pages it
+            finds, and extracts claims with a quote that is then located in the page it came from. A
+            second model reviews the recommendations before you see them. The future process is stored
+            as rows — activities, responsibilities, risks, costs — not as a paragraph of prose.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <ButtonLink href="/processes/new">Analyse your own process</ButtonLink>
-            <ButtonLink href="/how-it-works" variant="secondary">
-              How it works
+          <div className="mt-5 flex flex-wrap gap-2">
+            <ButtonLink href="/processes/new" variant="primary" size="lg">
+              Describe a process
+            </ButtonLink>
+            <ButtonLink href="/how-it-works" size="lg">
+              See how it works
             </ButtonLink>
           </div>
         </div>
 
-        <ol className="space-y-2 self-center">
+        <ul className="grid gap-2.5 self-center">
           {[
-            { n: 1, t: "Describe it as it is now", d: "Four or five steps. Any industry." },
-            { n: 2, t: "Press Analyse", d: "5–30 seconds. Nothing is pre-written." },
-            { n: 3, t: "Read the redesign", d: "With reasoning, risks and sources." },
-          ].map((step) => (
-            <li key={step.n} className="flex gap-3 rounded-lg bg-ink-50 p-3">
-              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-ink-900 text-xs font-bold text-white">
-                {step.n}
-              </span>
-              <div>
-                <p className="text-sm font-medium text-ink-900">{step.t}</p>
-                <p className="text-xs text-ink-500">{step.d}</p>
-              </div>
+            {
+              title: "Researched, not recalled",
+              body: "Bing, Google News, OpenAlex, Crossref, arXiv, Europe PMC, Wikipedia, Hacker News, Stack Exchange and an agentic search — all free, none requiring a key.",
+            },
+            {
+              title: "Quotes checked mechanically",
+              body: "Every citation carries a quote that was located in the stored page text by string matching. One that could not be found is shown as unverified rather than hidden.",
+            },
+            {
+              title: "Marked by a second model",
+              body: "A different model family reviews each recommendation and scores its evidence. Where the two disagree, you see the objection.",
+            },
+          ].map((item) => (
+            <li key={item.title} className="panel-quiet p-3.5">
+              <p className="text-[0.8125rem] font-semibold text-[var(--text-primary)]">{item.title}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">{item.body}</p>
             </li>
           ))}
-        </ol>
+        </ul>
       </div>
     </section>
   );
@@ -339,79 +260,52 @@ function Hero() {
 
 function ProcessCard({ process }: { process: ProcessSummary }) {
   const analysed = process.status === "ANALYZED";
-  const delta = process.futureActivityCount - process.activityCount;
+  const summary = useMemo(
+    () =>
+      process.description.length > 150 ? `${process.description.slice(0, 149)}…` : process.description,
+    [process.description],
+  );
 
   return (
-    <li>
-      <Link
-        href={`/processes/${process.id}`}
-        className="group flex h-full flex-col rounded-xl border border-ink-200 bg-white p-5 transition-all hover:border-ink-300 hover:shadow-md"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <h2 className="text-sm leading-snug font-semibold text-ink-900 group-hover:text-brand-700">
+    <Link
+      href={`/processes/${process.id}`}
+      className="panel group flex flex-col p-4 transition-all hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-panel)]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-[0.9375rem] font-semibold text-[var(--text-primary)]">
             {process.name}
-          </h2>
-          {analysed ? (
-            <Badge tone="success">Analysed</Badge>
-          ) : (
-            <Badge tone="neutral">Not run yet</Badge>
-          )}
+          </h3>
+          <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{process.industry}</p>
         </div>
+        <Badge tone={analysed ? "good" : "neutral"}>{analysed ? "Analysed" : "Not run"}</Badge>
+      </div>
 
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
-          {process.industry}
-          {process.shared ? (
-            <span
-              className="rounded bg-ink-100 px-1.5 py-0.5 font-medium text-ink-600"
-              title="A shared sample: everyone can read and analyse it, nobody can edit or delete it"
-            >
-              Shared sample
-            </span>
-          ) : (
-            <span className="rounded bg-brand-50 px-1.5 py-0.5 font-medium text-brand-700">Yours</span>
-          )}
-        </p>
-        <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-ink-600">
-          {process.description}
-        </p>
+      <p className="mt-2.5 line-clamp-3 flex-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+        {summary}
+      </p>
 
-        <div className="mt-auto border-t border-ink-100 pt-4">
-          {analysed ? (
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-ink-600">
-              <span className="tabular text-lg leading-none font-semibold text-ink-900">
-                {process.activityCount}
-              </span>
-              <span aria-hidden="true" className="text-ink-400">
-                →
-              </span>
-              <span className="tabular text-lg leading-none font-semibold text-ink-900">
-                {process.futureActivityCount}
-              </span>
-              <span>steps</span>
-              {delta !== 0 ? (
-                <span className="rounded-full bg-ink-100 px-1.5 py-0.5 text-[11px] font-medium">
-                  {delta > 0 ? "+" : ""}
-                  {delta}
-                </span>
-              ) : null}
-              <span className="ml-auto font-medium text-ink-700">
-                {process.opportunityCount} AI ideas
-              </span>
-            </div>
-          ) : (
-            <p className="text-xs text-ink-500">
-              <span className="tabular font-semibold text-ink-900">{process.activityCount}</span>{" "}
-              steps recorded — open it and press Analyse
-            </p>
-          )}
+      <dl className="mt-3.5 grid grid-cols-3 gap-2 border-t border-[var(--border-subtle)] pt-3">
+        <div>
+          <dt className="eyebrow">Steps</dt>
+          <dd className="tabular text-sm font-semibold">{process.activityCount}</dd>
         </div>
+        <div>
+          <dt className="eyebrow">AI ideas</dt>
+          <dd className="tabular text-sm font-semibold">{process.opportunityCount || "—"}</dd>
+        </div>
+        <div>
+          <dt className="eyebrow">Future</dt>
+          <dd className="tabular text-sm font-semibold">{process.futureActivityCount || "—"}</dd>
+        </div>
+      </dl>
 
-        {process.lastAnalyzedAt ? (
-          <p className="mt-2 text-[11px] text-ink-400">
-            Last analysed {formatDateTime(process.lastAnalyzedAt)}
-          </p>
-        ) : null}
-      </Link>
-    </li>
+      <p className="mt-2.5 text-[0.6875rem] text-[var(--text-muted)]">
+        {process.shared ? "Shared sample · " : ""}
+        {analysed && process.lastAnalyzedAt
+          ? `Analysed ${formatDateTime(process.lastAnalyzedAt)}`
+          : `Added ${formatDateTime(process.createdAt)}`}
+      </p>
+    </Link>
   );
 }

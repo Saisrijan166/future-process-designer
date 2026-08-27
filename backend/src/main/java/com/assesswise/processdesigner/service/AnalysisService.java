@@ -1,16 +1,27 @@
 package com.assesswise.processdesigner.service;
 
+import com.assesswise.processdesigner.config.AppProperties;
 import com.assesswise.processdesigner.exception.AiNotConfiguredException;
 import com.assesswise.processdesigner.exception.AiProviderException;
 import com.assesswise.processdesigner.exception.AnalysisFailedException;
 import com.assesswise.processdesigner.exception.AnalysisInProgressException;
 import com.assesswise.processdesigner.service.KnowledgeRetrievalService.ScoredSnippet;
 import com.assesswise.processdesigner.service.ai.AiCompletion;
+import com.assesswise.processdesigner.service.ai.AiGateway;
 import com.assesswise.processdesigner.service.ai.AiProvider;
 import com.assesswise.processdesigner.service.ai.AiRequest;
+import com.assesswise.processdesigner.service.ai.AiTask;
+import com.assesswise.processdesigner.service.ai.AnalysisJsonSchema;
+import com.assesswise.processdesigner.service.pipeline.PipelineContext;
+import com.assesswise.processdesigner.service.pipeline.StagedAnalysisPipeline;
+import com.assesswise.processdesigner.service.progress.ProgressEvent;
+import com.assesswise.processdesigner.service.progress.ProgressSink;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,35 +30,43 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * The intelligence layer's orchestrator. One method, one pipeline, identical for every process:
+ * The intelligence layer's orchestrator.
  *
- * <ol>
- *   <li>load the process, its activities and any recorded problems;
- *   <li>retrieve grounding snippets by keyword match;
- *   <li>render the prompt template with that data;
- *   <li>call the single configured {@link AiProvider};
- *   <li>parse and validate the response, retrying <em>once</em> with a repair prompt if it is unusable;
- *   <li>persist the result as rows with resolved foreign keys;
- *   <li>record the run for traceability.
- * </ol>
+ * <p>Two pipelines live behind one method, selected by {@code app.analysis.pipeline}:
  *
- * <p>There is no branch anywhere in this class on <em>which</em> process is being analysed. A
- * process created thirty seconds ago in a industry nobody anticipated takes exactly this path.
+ * <ul>
+ *   <li><b>staged</b> (default) — ten stages: read the process, diagnose it, research the domain
+ *       live, propose grounded interventions, have a second model review them, design the future
+ *       state, quantify it, assess risk, sequence delivery, and score the result. Each stage is its
+ *       own model call with its own prompt and its own stored audit row.
+ *   <li><b>single</b> — the original one-prompt analysis, retained because it is a genuinely useful
+ *       fallback: it costs one request instead of eight, which matters when a free-tier daily quota
+ *       is nearly spent, and it is the path the older integration tests exercise.
+ * </ul>
+ *
+ * <p>What both share, and what makes the "surprise process" test pass: there is no branch anywhere
+ * on <em>which</em> process is being analysed. A process created thirty seconds ago in an industry
+ * nobody anticipated takes exactly the same path as a seeded one.
  */
 @Service
 public class AnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisService.class);
 
+    private static final String SINGLE_CALL_PIPELINE = "1-single-call";
+
     private final AnalysisInputLoader inputLoader;
     private final KnowledgeRetrievalService knowledgeRetrievalService;
     private final PromptBuilder promptBuilder;
     private final AiProvider aiProvider;
+    private final AiGateway aiGateway;
     private final AnalysisResponseParser responseParser;
     private final AnalysisPayloadValidator validator;
     private final AnalysisPersistenceService persistenceService;
     private final AnalysisRunRecorder runRecorder;
     private final AnalysisRateLimiter rateLimiter;
+    private final StagedAnalysisPipeline stagedPipeline;
+    private final boolean useStagedPipeline;
 
     /**
      * Processes currently being analysed. Concurrent analyses of the same process would race on
@@ -61,30 +80,48 @@ public class AnalysisService {
             KnowledgeRetrievalService knowledgeRetrievalService,
             PromptBuilder promptBuilder,
             AiProvider aiProvider,
+            AiGateway aiGateway,
             AnalysisResponseParser responseParser,
             AnalysisPayloadValidator validator,
             AnalysisPersistenceService persistenceService,
             AnalysisRunRecorder runRecorder,
-            AnalysisRateLimiter rateLimiter) {
+            AnalysisRateLimiter rateLimiter,
+            StagedAnalysisPipeline stagedPipeline,
+            AppProperties properties) {
         this.inputLoader = inputLoader;
         this.knowledgeRetrievalService = knowledgeRetrievalService;
         this.promptBuilder = promptBuilder;
         this.aiProvider = aiProvider;
+        this.aiGateway = aiGateway;
         this.responseParser = responseParser;
         this.validator = validator;
         this.persistenceService = persistenceService;
         this.runRecorder = runRecorder;
         this.rateLimiter = rateLimiter;
+        this.stagedPipeline = stagedPipeline;
+        this.useStagedPipeline = !"single".equalsIgnoreCase(properties.analysis().pipeline());
+        log.info("Analysis pipeline: {}", useStagedPipeline ? StagedAnalysisPipeline.PIPELINE_VERSION : SINGLE_CALL_PIPELINE);
     }
 
     /** What the caller needs to report the outcome; the full detail is re-read afterwards. */
     public record AnalysisOutcome(UUID runId, AnalysisPersistenceService.PersistResult persisted) {}
 
     public AnalysisOutcome analyze(UUID processId) {
-        if (!aiProvider.isConfigured()) {
+        return analyze(processId, ProgressSink.NONE);
+    }
+
+    /**
+     * Runs one analysis, reporting progress as it goes.
+     *
+     * @param sink where to send progress events; {@link ProgressSink#NONE} for a plain request. The
+     *     same code path runs either way, so a streamed run and an unstreamed one are the same run.
+     */
+    public AnalysisOutcome analyze(UUID processId, ProgressSink sink) {
+        if (!aiProvider.isConfigured() && !aiGateway.isConfigured()) {
             throw new AiNotConfiguredException(
-                    "The analysis pipeline has no AI credentials configured. Set GEMINI_API_KEY on the backend "
-                            + "service and restart it.");
+                    "The analysis pipeline has no AI credentials configured. Set GROQ_API_KEY (free, from "
+                            + "https://console.groq.com/keys) or GEMINI_API_KEY on the backend service and "
+                            + "restart it.");
         }
         if (!inFlight.add(processId)) {
             throw new AnalysisInProgressException(
@@ -92,13 +129,184 @@ public class AnalysisService {
         }
         try {
             rateLimiter.acquire();
-            return runPipeline(processId);
+            return useStagedPipeline ? runStagedPipeline(processId, sink) : runSingleCallPipeline(processId);
         } finally {
             inFlight.remove(processId);
         }
     }
 
-    private AnalysisOutcome runPipeline(UUID processId) {
+    // =============================================================================================
+    // The staged pipeline
+    // =============================================================================================
+
+    private AnalysisOutcome runStagedPipeline(UUID processId, ProgressSink sink) {
+        Instant startedAt = Instant.now();
+
+        AnalysisInputLoader.AnalysisInput input = inputLoader.load(processId);
+        // The curated corpus is still retrieved, as the fallback grounding for a run whose live
+        // research finds nothing. It costs one indexed query and it is the difference between a
+        // degraded analysis and a groundless one.
+        List<ScoredSnippet> curated =
+                knowledgeRetrievalService.retrieve(input.process(), input.activities());
+
+        UUID runId = runRecorder.startRun(processId, primaryProviderName(), "staged pipeline", null, curated);
+        log.info("Staged analysis run {} started for process '{}' ({} activities, {} curated snippets)",
+                runId, input.process().getName(), input.activities().size(), curated.size());
+
+        sink.emit(ProgressEvent.Type.STAGE_STARTED, "run", "Analysis started",
+                "Analysing \"%s\"".formatted(input.process().getName()),
+                Map.of("runId", runId.toString(), "processId", processId.toString()));
+
+        PipelineContext context = new PipelineContext(
+                processId, runId, input.process(), input.activities(), input.knownProblems(), curated, sink);
+
+        try {
+            StagedAnalysisPipeline.PipelineOutcome outcome = stagedPipeline.run(context);
+
+            Map<Integer, UUID> claimIds = new LinkedHashMap<>();
+            context.claimsByCitationIndex().forEach((index, claim) -> claimIds.put(index, claim.getId()));
+
+            AnalysisPersistenceService.PersistResult persisted = persistenceService.replaceAnalysis(
+                    new AnalysisPersistenceService.PersistCommand(
+                            processId, outcome.analysis(), curated, claimIds, runId, outcome.scorecard()));
+
+            List<String> warnings = new ArrayList<>(outcome.warnings());
+            warnings.addAll(persisted.warnings());
+
+            recordStagedSuccess(runId, outcome, warnings, startedAt);
+            sink.emit(ProgressEvent.Type.RUN_FINISHED, "run", "Analysis complete", summaryOf(persisted, outcome),
+                    Map.of("runId", runId.toString(),
+                            "stages", outcome.succeededStages(),
+                            "warnings", warnings.size(),
+                            "score", outcome.scorecard() == null ? 0 : outcome.scorecard().overall()));
+
+            log.info("Staged analysis run {} succeeded: {}", runId, summaryOf(persisted, outcome));
+            return new AnalysisOutcome(runId, persisted);
+
+        } catch (AnalysisFailedException e) {
+            runRecorder.recordFailure(runId, e.getMessage() + " " + e.getDetail(), null, false, startedAt);
+            sink.emit(ProgressEvent.Type.STAGE_FAILED, "run", "Analysis failed", e.getMessage());
+            throw e;
+        } catch (AiProviderException e) {
+            runRecorder.recordFailure(runId, e.getMessage(), null, false, startedAt);
+            sink.emit(ProgressEvent.Type.STAGE_FAILED, "run", "Analysis failed", e.getMessage());
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("Staged analysis run {} failed unexpectedly", runId, e);
+            runRecorder.recordFailure(runId, e.getClass().getSimpleName() + ": " + e.getMessage(),
+                    null, false, startedAt);
+            sink.emit(ProgressEvent.Type.STAGE_FAILED, "run", "Analysis failed",
+                    "Unexpected failure: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Records which model actually did most of the work.
+     *
+     * <p>A staged run has no single model, so the run row names the one that served the most stages
+     * and the stage rows hold the detail. Reporting "staged pipeline" alone would lose the fact that
+     * a run was quietly served by the fallback provider throughout.
+     */
+    private void recordStagedSuccess(
+            UUID runId,
+            StagedAnalysisPipeline.PipelineOutcome outcome,
+            List<String> warnings,
+            Instant startedAt) {
+
+        Map<String, Integer> modelUsage = new LinkedHashMap<>();
+        Map<String, String> providerByModel = new LinkedHashMap<>();
+        for (StagedAnalysisPipeline.StageOutcome stage : outcome.stageResults()) {
+            if (stage.result().model() == null) {
+                continue;
+            }
+            modelUsage.merge(stage.result().model(), 1, Integer::sum);
+            providerByModel.putIfAbsent(stage.result().model(), stage.result().provider());
+        }
+        String dominantModel = modelUsage.entrySet().stream()
+                .max(Comparator.comparingInt(Map.Entry::getValue))
+                .map(Map.Entry::getKey)
+                .orElse("none");
+        String provider = providerByModel.getOrDefault(dominantModel, primaryProviderName());
+
+        List<String> notes = new ArrayList<>();
+        modelUsage.forEach((model, count) -> notes.add("%s served %d stage(s)".formatted(model, count)));
+        if (outcome.cacheHits() > 0) {
+            notes.add("%d stage(s) were served from the response cache at no quota cost"
+                    .formatted(outcome.cacheHits()));
+        }
+        if (outcome.throttledMs() > 500) {
+            notes.add("Waited %.1fs in total for free-tier token budget".formatted(outcome.throttledMs() / 1000.0));
+        }
+
+        AiCompletion aggregate = new AiCompletion(
+                describeStages(outcome),
+                outcome.promptTokens(),
+                outcome.outputTokens(),
+                java.time.Duration.between(startedAt, Instant.now()).toMillis(),
+                "STOP",
+                provider,
+                dominantModel,
+                notes,
+                List.of(),
+                outcome.cacheHits() == outcome.stageResults().size() && outcome.cacheHits() > 0,
+                null);
+
+        runRecorder.recordSuccess(runId, aggregate, false, warnings, startedAt);
+        runRecorder.recordStageTotals(runId, StagedAnalysisPipeline.PIPELINE_VERSION,
+                outcome.stageResults().size(), outcome.promptTokens(), outcome.outputTokens(),
+                outcome.cacheHits(), outcome.throttledMs(), outcome.researchRunId());
+    }
+
+    /**
+     * A readable digest of the run, stored where the single-call pipeline stores its raw response.
+     *
+     * <p>The full prompts and responses live on the stage rows; putting them here as well would
+     * duplicate a great deal of text. What goes here is the shape of the run: which stage ran on
+     * which model, what it produced, and what it cost.
+     */
+    private String describeStages(StagedAnalysisPipeline.PipelineOutcome outcome) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Staged pipeline: ").append(outcome.stageResults().size()).append(" stages\n");
+        for (StagedAnalysisPipeline.StageOutcome stage : outcome.stageResults()) {
+            builder.append("- [").append(stage.result().status()).append("] ")
+                    .append(stage.stageId());
+            if (stage.result().model() != null) {
+                builder.append(" via ").append(stage.result().model());
+            }
+            if (stage.result().cached()) {
+                builder.append(" (cached)");
+            }
+            builder.append(": ").append(stage.result().summary() == null ? "" : stage.result().summary())
+                    .append('\n');
+            if (stage.result().error() != null) {
+                builder.append("    error: ").append(stage.result().error()).append('\n');
+            }
+        }
+        return builder.toString();
+    }
+
+    private String summaryOf(
+            AnalysisPersistenceService.PersistResult persisted, StagedAnalysisPipeline.PipelineOutcome outcome) {
+        return ("%d problems, %d opportunities (%d citations), %d future steps, %d interventions, "
+                        + "%d reviews, %d estimates, %d risks, %d roadmap items; score %s")
+                .formatted(persisted.problems(), persisted.opportunities(), persisted.citations(),
+                        persisted.futureActivities(), persisted.interventions(), persisted.reviews(),
+                        persisted.impacts(), persisted.risks(), persisted.roadmapItems(),
+                        outcome.scorecard() == null
+                                ? "not computed"
+                                : outcome.scorecard().overall() + "/100 (" + outcome.scorecard().grade() + ")");
+    }
+
+    private String primaryProviderName() {
+        return aiProvider.name();
+    }
+
+    // =============================================================================================
+    // The original single-call pipeline, kept as a low-quota fallback
+    // =============================================================================================
+
+    private AnalysisOutcome runSingleCallPipeline(UUID processId) {
         Instant startedAt = Instant.now();
 
         AnalysisInputLoader.AnalysisInput input = inputLoader.load(processId);
@@ -108,13 +316,18 @@ public class AnalysisService {
                 input.process(), input.activities(), input.knownProblems(), snippets);
 
         UUID runId = runRecorder.startRun(processId, aiProvider.name(), aiProvider.model(), prompt, snippets);
-        log.info("Analysis run {} started for process '{}' ({} activities, {} grounding snippets, model {})",
-                runId, input.process().getName(), input.activities().size(), snippets.size(), aiProvider.model());
+        log.info("Single-call analysis run {} started for process '{}' ({} activities, {} grounding snippets)",
+                runId, input.process().getName(), input.activities().size(), snippets.size());
 
         boolean repairAttempted = false;
         String lastRawResponse = null;
         try {
-            AiCompletion completion = aiProvider.complete(AiRequest.of(prompt, "analyze"));
+            // The single-call path is the one place a fixed response schema is right, because one
+            // call produces the whole analysis. Passed explicitly rather than defaulted, so no other
+            // stage can inherit it.
+            AiCompletion completion = aiGateway.complete(
+                    AiTask.LEGACY_ANALYSIS,
+                    AiRequest.of(prompt, "analyze").withResponseSchema(AnalysisJsonSchema.build()));
             lastRawResponse = completion.text();
             if (completion.truncated()) {
                 log.warn("Run {}: the model hit its output limit; the response is probably truncated.", runId);
@@ -130,7 +343,10 @@ public class AnalysisService {
                 log.warn("Run {}: unusable response ({}). Retrying once with a repair prompt.",
                         runId, String.join(" | ", attempt.errors()));
                 String repairPrompt = promptBuilder.buildRepairPrompt(prompt, completion.text(), attempt.errors());
-                completion = aiProvider.complete(new AiRequest(repairPrompt, "repair", true));
+                completion = aiGateway.complete(
+                        AiTask.REPAIR,
+                        new AiRequest(repairPrompt, "repair", true)
+                                .withResponseSchema(AnalysisJsonSchema.build()));
                 lastRawResponse = completion.text();
                 attempt = evaluate(completion.text());
             }
@@ -149,6 +365,10 @@ public class AnalysisService {
             List<String> warnings = new ArrayList<>(attempt.warnings());
             warnings.addAll(persisted.warnings());
             runRecorder.recordSuccess(runId, completion, repairAttempted, warnings, startedAt);
+            runRecorder.recordStageTotals(runId, SINGLE_CALL_PIPELINE, 1,
+                    completion.promptTokens() == null ? 0 : completion.promptTokens(),
+                    completion.outputTokens() == null ? 0 : completion.outputTokens(),
+                    completion.cached() ? 1 : 0, 0, null);
 
             log.info("Analysis run {} succeeded: {} problems, {} opportunities, {} future activities, "
                             + "{} interventions, {} warning(s)",
@@ -184,5 +404,4 @@ public class AnalysisService {
         AnalysisPayloadValidator.Outcome outcome = validator.validate(parsed.payload());
         return new Attempt(outcome.analysis(), outcome.errors(), outcome.warnings());
     }
-
 }

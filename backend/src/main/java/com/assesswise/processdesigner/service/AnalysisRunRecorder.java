@@ -87,6 +87,37 @@ public class AnalysisRunRecorder {
         runRepository.save(run);
     }
 
+    /**
+     * Records what the run cost and which pipeline produced it.
+     *
+     * <p>Separate from {@link #recordSuccess} because the single-call and staged pipelines have
+     * genuinely different accounting: one call with one token count, or ten stages of which some
+     * were cached and some waited on a rate limit. Both end up in the same columns, which is what
+     * lets the run history compare them.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordStageTotals(
+            UUID runId,
+            String pipelineVersion,
+            int stageCount,
+            int promptTokens,
+            int outputTokens,
+            int cacheHits,
+            long throttledMs,
+            UUID researchRunId) {
+
+        runRepository.findById(runId).ifPresent(run -> {
+            run.setPipelineVersion(pipelineVersion);
+            run.setStageCount(stageCount);
+            run.setTotalPromptTokens(promptTokens);
+            run.setTotalOutputTokens(outputTokens);
+            run.setCacheHitCount(cacheHits);
+            run.setThrottledMs(throttledMs);
+            run.setResearchRunId(researchRunId);
+            runRepository.save(run);
+        });
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFailure(
             UUID runId, String errorMessage, String rawResponse, boolean repairAttempted, Instant startedAt) {

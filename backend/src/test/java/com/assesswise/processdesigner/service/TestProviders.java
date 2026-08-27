@@ -31,7 +31,7 @@ public final class TestProviders {
 
     public static AppProperties.Analysis analysis(boolean rateLimitEnabled, int permitsPerMinute) {
         return new AppProperties.Analysis(
-                4, 30, 30, 30, 60, 40, 30, 0.34, false,
+                "single", 4, 30, 30, 30, 60, 40, 30, 0.34, false,
                 new AppProperties.RateLimit(rateLimitEnabled, permitsPerMinute));
     }
 

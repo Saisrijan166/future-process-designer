@@ -22,9 +22,14 @@ import org.springframework.stereotype.Component;
  * <p>Three facts shape the design:
  *
  * <ol>
- *   <li><b>Limits are per model, not per key.</b> So the buckets are keyed {@code provider:model},
- *       and routing two stages to two different models genuinely doubles the available throughput.
- *       This is exploited deliberately by {@link ModelRouter}.
+ *   <li><b>There are two ceilings, not one, and the second was learned the hard way.</b> Groq
+ *       publishes per-model limits in its response headers, and they are real — but the free tier
+ *       also enforces an <em>organisation-wide</em> tokens-per-minute ceiling across every model.
+ *       Measured directly: a call to {@code groq/compound-mini} was refused with "Rate limit
+ *       reached for model openai/gpt-oss-120b". So each request reserves against both a per-model
+ *       bucket and a shared per-provider one, and routing across models spreads <em>daily request</em>
+ *       budget rather than multiplying per-minute throughput. The genuine throughput multiplier is a
+ *       different <em>provider</em>, which has an entirely separate quota.
  *   <li><b>The provider tells the truth on every response.</b> Groq returns
  *       {@code x-ratelimit-remaining-tokens} and friends, so rather than guessing, each bucket is
  *       re-synchronised from the last response and refills at the observed rate in between.
@@ -58,7 +63,25 @@ public class TokenBudgetGovernor implements RateLimitListener {
 
     private static final Limits CONSERVATIVE_DEFAULT = new Limits(8_000, 500);
 
+    /**
+     * The organisation-wide ceiling each provider enforces across all of its models, which is the
+     * one that actually binds on Groq's free tier. Requests-per-day is left generous here because
+     * that limit really is per model; only the token ceiling is shared.
+     */
+    private static final Map<String, Limits> SHARED_PROVIDER_LIMITS = Map.of(
+            "groq", new Limits(8_000, 100_000),
+            "gemini", new Limits(250_000, 100_000));
+
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+
+    /**
+     * Total time callers have spent waiting, counted once per admitted call.
+     *
+     * <p>Summing the per-bucket figures would double count: every reservation passes through both a
+     * shared bucket and a per-model one, and a run that waited six minutes would report twelve.
+     */
+    private final java.util.concurrent.atomic.AtomicLong totalThrottledMillis =
+            new java.util.concurrent.atomic.AtomicLong();
 
     /** Tokens allowed per minute, and requests allowed per day. */
     public record Limits(int tokensPerMinute, int requestsPerDay) {}
@@ -99,8 +122,40 @@ public class TokenBudgetGovernor implements RateLimitListener {
      * @return an admitted reservation, or a denial explaining what the wait would have been
      */
     public Reservation reserve(String provider, String model, int estimatedTokens, Duration maxWait) {
-        Bucket bucket = buckets.computeIfAbsent(key(provider, model), Bucket::new);
-        return bucket.reserve(estimatedTokens, maxWait);
+        // The shared bucket first: it is the binding constraint, so waiting for the model's own
+        // bucket before discovering the organisation has no budget left would waste the wait.
+        Bucket shared = sharedBucket(provider);
+        Reservation sharedReservation = shared.reserve(estimatedTokens, maxWait);
+        if (!sharedReservation.admitted()) {
+            return sharedReservation;
+        }
+
+        Bucket perModel = buckets.computeIfAbsent(key(provider, model), Bucket::new);
+        Duration remaining = maxWait.minusMillis(sharedReservation.waitedMillis());
+        Reservation modelReservation =
+                perModel.reserve(estimatedTokens, remaining.isNegative() ? Duration.ZERO : remaining);
+
+        if (!modelReservation.admitted()) {
+            // Hand the shared allowance back: the call is not being made, and holding the tokens
+            // would starve the next candidate model for no reason.
+            shared.refund(estimatedTokens);
+            return Reservation.denied(modelReservation.reason(),
+                    sharedReservation.waitedMillis() + modelReservation.waitedMillis());
+        }
+        long waited = sharedReservation.waitedMillis() + modelReservation.waitedMillis();
+        totalThrottledMillis.addAndGet(waited);
+        return Reservation.ok(waited);
+    }
+
+    private Bucket sharedBucket(String provider) {
+        String sharedKey = sharedKey(provider);
+        return buckets.computeIfAbsent(sharedKey, key -> new Bucket(key,
+                SHARED_PROVIDER_LIMITS.getOrDefault(
+                        provider == null ? "" : provider.toLowerCase(Locale.ROOT), CONSERVATIVE_DEFAULT)));
+    }
+
+    private static String sharedKey(String provider) {
+        return (provider == null ? "?" : provider.toLowerCase(Locale.ROOT)) + ":*shared*";
     }
 
     /** Re-synchronises a bucket from the response headers the provider just sent. */
@@ -109,17 +164,30 @@ public class TokenBudgetGovernor implements RateLimitListener {
         if (headers == null || headers.isEmpty()) {
             return;
         }
+        // Only the per-model bucket is synchronised from headers. The shared bucket is not: the
+        // headers describe one model's allowance, and copying them onto the organisation-wide
+        // ceiling would keep resetting it to whichever model answered last.
         buckets.computeIfAbsent(key(provider, model), Bucket::new).observe(headers);
     }
 
     /** Corrects the estimate once the real usage is known. */
     public void observeUsage(String provider, String model, int actualTokens, int estimatedTokens) {
         buckets.computeIfAbsent(key(provider, model), Bucket::new).correct(actualTokens, estimatedTokens);
+        sharedBucket(provider).correct(actualTokens, estimatedTokens);
     }
 
     /** Called on a 429 or 413: stop offering this model until the provider says it is ready. */
+    /**
+     * Called on a 429 or 413. Cools the model that was refused, and — because the ceiling is shared
+     * — briefly cools the whole provider too, since immediately trying a sibling model would earn
+     * the same refusal.
+     */
     public void penalise(String provider, String model, Duration cooldown) {
         buckets.computeIfAbsent(key(provider, model), Bucket::new).cool(cooldown);
+        Duration sharedCooldown = cooldown.compareTo(Duration.ofSeconds(8)) > 0
+                ? Duration.ofSeconds(8)
+                : cooldown;
+        sharedBucket(provider).cool(sharedCooldown);
     }
 
     public List<Snapshot> snapshots() {
@@ -129,9 +197,9 @@ public class TokenBudgetGovernor implements RateLimitListener {
         return all;
     }
 
-    /** Total time the governor has made the pipeline wait, across every model. */
+    /** Total time the governor has made callers wait, counted once per admitted call. */
     public long totalThrottledMillis() {
-        return buckets.values().stream().mapToLong(bucket -> bucket.throttledMillis).sum();
+        return totalThrottledMillis.get();
     }
 
     // -----------------------------------------------------------------------------------------
@@ -150,10 +218,20 @@ public class TokenBudgetGovernor implements RateLimitListener {
         private int rejected;
 
         private Bucket(String key) {
+            this(key, SEEDED_LIMITS.getOrDefault(key, CONSERVATIVE_DEFAULT));
+        }
+
+        private Bucket(String key, Limits limits) {
             this.key = key;
-            this.limits = SEEDED_LIMITS.getOrDefault(key, CONSERVATIVE_DEFAULT);
+            this.limits = limits;
             this.remainingTokens = limits.tokensPerMinute();
             this.remainingRequests = limits.requestsPerDay();
+        }
+
+        /** Returns an unused reservation, so a call that never happened costs nothing. */
+        synchronized void refund(int tokens) {
+            remainingTokens = Math.min(limits.tokensPerMinute(), remainingTokens + tokens);
+            remainingRequests = Math.min(limits.requestsPerDay(), remainingRequests + 1);
         }
 
         synchronized Reservation reserve(int estimatedTokens, Duration maxWait) {
