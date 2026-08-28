@@ -91,8 +91,14 @@ app:
   ai:
     # The provider tried first, then the ordered fallbacks. Free tiers run out; the chain is what
     # keeps a demo alive when they do.
-    provider: ${AI_PROVIDER:gemini}
-    fallback-providers: ${AI_FALLBACK_PROVIDERS:groq}
+    #
+    # Groq first. It allows a thousand requests a day per model against Gemini's few dozen, which
+    # is the difference between a ten-stage pipeline being affordable and not. This default was
+    # left on gemini after the rebuild and a deployment that did not set AI_PROVIDER quietly ran
+    # the whole pipeline on the smaller quota — the default has to be the one the system is
+    # designed around, because it is what an unconfigured environment gets.
+    provider: ${AI_PROVIDER:groq}
+    fallback-providers: ${AI_FALLBACK_PROVIDERS:gemini}
     gemini:
       api-key: ${GEMINI_API_KEY:}
       model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
