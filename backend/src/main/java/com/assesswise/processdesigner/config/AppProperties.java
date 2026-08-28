@@ -95,10 +95,12 @@ public record AppProperties(
              * comma-separated candidate list of {@code provider:model} (an empty model means the
              * provider's own default). A task with no entry falls back to the provider chain above.
              *
-             * <p>This is the single most important free-tier lever in the application. Groq's rate
-             * limits are enforced <em>per model</em>, so routing different pipeline stages to
-             * different models multiplies the usable throughput instead of queueing everything
-             * behind one bucket.
+             * <p>Routing buys two things, and it is worth being precise about which. Each model has
+             * its own <em>daily request</em> allowance, so spreading stages across models multiplies
+             * how many runs a day are possible. It does <em>not</em> multiply throughput: the
+             * tokens-per-minute ceiling is enforced organisation-wide, which was established by
+             * watching a call to one Groq model refused by name for another model's rate limit.
+             * Only a second provider adds throughput.
              */
             @DefaultValue Map<String, String> routing,
             /** Persistent prompt→response cache. Re-running an unchanged stage then costs nothing. */

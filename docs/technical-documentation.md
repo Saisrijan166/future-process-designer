@@ -452,6 +452,9 @@ Every knob is an environment variable; nothing requires a code change. Defaults 
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Any model the key can reach |
 | `GEMINI_THINKING_BUDGET` | `0` | `0` disables thinking and saves free-tier tokens; `-1` restores the model default |
 | `GEMINI_STRUCTURED_OUTPUT` | `true` | Whether a caller-supplied response schema is sent. Validation and repair run either way |
+| `AI_CEREBRAS_ENABLED` / `_API_KEY` / `_MODEL` | `false` | A third provider, dormant until enabled. Speaks the same OpenAI dialect, so it is configuration rather than code |
+| `AI_OPENROUTER_ENABLED` / `_API_KEY` / `_MODEL` | `false` | As above. Models whose id ends in `:free` cost nothing |
+| `AI_OLLAMA_ENABLED` / `_MODEL` / `_BASE_URL` | `false` | A locally-run model: no key, no quota, no network. Slower, so its read timeout defaults to 300s |
 | `AI_ROUTE_<TASK>` | *(built-in defaults)* | Per-task routing: a comma-separated list of `provider:model`, best first. One per stage — `AI_ROUTE_DIAGNOSIS`, `AI_ROUTE_CRITIQUE`, `AI_ROUTE_CLAIM_EXTRACTION`, and so on |
 | `AI_CACHE_ENABLED` | `true` | Remembered model responses in Postgres |
 | `AI_CACHE_TTL_HOURS` | `72` | How long a remembered response stays usable |

@@ -120,6 +120,42 @@ app:
       # The agentic model used as a research connector: it runs its own web searches and
       # returns the pages it read, which are stored and quote-verified like any other source.
       research-model: ${GROQ_RESEARCH_MODEL:groq/compound}
+    # ---------------------------------------------------------------------------
+    # MORE PROVIDERS, WITHOUT MORE CODE
+    #
+    # Cerebras, OpenRouter and a local Ollama all speak the OpenAI dialect, so each is
+    # configuration rather than a class. Each stays dormant until enabled, and a dormant
+    # provider is never routed to.
+    #
+    # Worth doing: a second *provider* is the only real throughput multiplier, because each
+    # has its own per-minute ceiling. A second model on an account you already use does not
+    # help — that ceiling is shared. Once one is enabled, point stages at it with
+    # AI_ROUTE_<TASK>, e.g. AI_ROUTE_CLAIM_EXTRACTION=cerebras:,groq:openai/gpt-oss-20b
+    #
+    # `model` has no default on purpose: these are catalogues that change, and guessing an id
+    # that has been retired fails at the worst moment. Look one up and name it.
+    # ---------------------------------------------------------------------------
+    cerebras:
+      enabled: ${AI_CEREBRAS_ENABLED:false}
+      api-key: ${AI_CEREBRAS_API_KEY:}
+      model: ${AI_CEREBRAS_MODEL:}
+      max-output-tokens: ${AI_CEREBRAS_MAX_OUTPUT_TOKENS:4096}
+    openrouter:
+      enabled: ${AI_OPENROUTER_ENABLED:false}
+      api-key: ${AI_OPENROUTER_API_KEY:}
+      model: ${AI_OPENROUTER_MODEL:}
+      max-output-tokens: ${AI_OPENROUTER_MAX_OUTPUT_TOKENS:4096}
+    ollama:
+      enabled: ${AI_OLLAMA_ENABLED:false}
+      # A local Ollama needs no key, which is why this one is exempt from the key check.
+      requires-api-key: false
+      api-key: ${AI_OLLAMA_API_KEY:}
+      model: ${AI_OLLAMA_MODEL:}
+      base-url: ${AI_OLLAMA_BASE_URL:http://localhost:11434/v1}
+      # A local model on a laptop is slower than a hosted one, and the default read timeout
+      # is not written for that.
+      read-timeout-seconds: ${AI_OLLAMA_READ_TIMEOUT_SECONDS:300}
+
     # Per-task model routing. Empty here means the defaults in ModelRouter apply; set one
     # to a comma-separated list of provider:model to override, e.g.
     #   AI_ROUTE_DIAGNOSIS=gemini:,groq:openai/gpt-oss-120b
