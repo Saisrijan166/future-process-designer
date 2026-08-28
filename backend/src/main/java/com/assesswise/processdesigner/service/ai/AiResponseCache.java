@@ -143,7 +143,9 @@ public class AiResponseCache {
                 List.of("served from the response cache (stored %s)".formatted(entry.getCreatedAt())),
                 deserialiseTools(entry.getExecutedTools()),
                 true,
-                null);
+                null,
+                // A cache hit waits for nothing: that is the entire point of it.
+                0L);
     }
 
     private String serialiseTools(List<AiCompletion.ExecutedTool> tools) {

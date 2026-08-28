@@ -149,7 +149,11 @@ public class AiGateway {
                             task,
                             completion);
                 }
-                return withNotes(completion, notes);
+                // The queuing time travels with the response, so a stage can record how much of
+                // its duration was the free tier rather than the model. Left only in a note before,
+                // which meant the run trace showed "38s, waited 0s" for a stage that spent 34 of
+                // those seconds queued.
+                return withNotes(completion, notes).withWait(reservation.waitedMillis());
 
             } catch (AiNotConfiguredException e) {
                 notes.add("%s skipped: no API key".formatted(candidate.key()));

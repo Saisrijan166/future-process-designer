@@ -62,7 +62,7 @@ public record StageResult(
                 completion == null ? null : completion.promptTokens(),
                 completion == null ? null : completion.outputTokens(),
                 completion == null ? durationMs : completion.durationMs(),
-                waitedMs,
+                completion == null ? waitedMs : completion.waitedMs(),
                 completion != null && completion.cached(),
                 attempts,
                 completion == null ? notes : merge(notes, completion.providerNotes()),

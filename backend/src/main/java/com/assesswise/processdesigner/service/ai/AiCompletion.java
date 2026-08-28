@@ -15,6 +15,10 @@ import java.util.List;
  *     reason this field exists: those pages become citable sources like any other.
  * @param cached true when this response came from the persistent prompt cache rather than the
  *     network. Recorded because "the pipeline spent nothing here" is a fact worth being able to see.
+ * @param waitedMs of {@code durationMs}, how long was spent queued behind the free-tier token
+ *     ceiling rather than waiting for the model to think. The two are worth telling apart: a stage
+ *     that took 38 seconds of which 34 were queuing is a budget problem, and a stage that took 38
+ *     seconds of thinking is a model problem. They call for opposite fixes.
  */
 public record AiCompletion(
         String text,
@@ -27,7 +31,14 @@ public record AiCompletion(
         List<String> providerNotes,
         List<ExecutedTool> executedTools,
         boolean cached,
-        String reasoning) {
+        String reasoning,
+        long waitedMs) {
+
+    /** The same completion, with the queuing time the gateway measured attached. */
+    public AiCompletion withWait(long millis) {
+        return new AiCompletion(text, promptTokens, outputTokens, durationMs, finishReason, provider,
+                model, providerNotes, executedTools, cached, reasoning, millis);
+    }
 
     /** One server-side tool call a provider made while answering. */
     public record ExecutedTool(String type, String arguments, String output) {}
@@ -47,27 +58,27 @@ public record AiCompletion(
             String model) {
         return new AiCompletion(
                 text, promptTokens, outputTokens, durationMs, finishReason, provider, model,
-                List.of(), List.of(), false, null);
+                List.of(), List.of(), false, null, 0L);
     }
 
     public AiCompletion withProviderNotes(List<String> notes) {
         return new AiCompletion(text, promptTokens, outputTokens, durationMs, finishReason,
-                provider, model, notes, executedTools, cached, reasoning);
+                provider, model, notes, executedTools, cached, reasoning, waitedMs);
     }
 
     public AiCompletion withExecutedTools(List<ExecutedTool> tools) {
         return new AiCompletion(text, promptTokens, outputTokens, durationMs, finishReason,
-                provider, model, providerNotes, tools, cached, reasoning);
+                provider, model, providerNotes, tools, cached, reasoning, waitedMs);
     }
 
     public AiCompletion withReasoning(String modelReasoning) {
         return new AiCompletion(text, promptTokens, outputTokens, durationMs, finishReason,
-                provider, model, providerNotes, executedTools, cached, modelReasoning);
+                provider, model, providerNotes, executedTools, cached, modelReasoning, waitedMs);
     }
 
     public AiCompletion asCached() {
         return new AiCompletion(text, promptTokens, outputTokens, durationMs, finishReason,
-                provider, model, providerNotes, executedTools, true, reasoning);
+                provider, model, providerNotes, executedTools, true, reasoning, waitedMs);
     }
 
     /** Total tokens the call cost, as far as the provider reported them. */

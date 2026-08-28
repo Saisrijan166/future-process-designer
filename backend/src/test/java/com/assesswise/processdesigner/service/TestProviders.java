@@ -51,6 +51,7 @@ public final class TestProviders {
         return new AppProperties.Research(
                 false, List.of(), 4, 5, 5, 20, 20000, 6000, 5, 2, 1, 1, true,
                 "AssessWiseResearchBot/2.0 (test)", false, "https://r.jina.ai/",
+                2,
                 keyedSearch(), keyedSearch(), keyedSearch());
     }
 

@@ -197,6 +197,13 @@ app:
     document-cache-ttl-hours: ${RESEARCH_DOCUMENT_CACHE_TTL_HOURS:168}
     respect-robots-txt: ${RESEARCH_RESPECT_ROBOTS:true}
     user-agent: ${RESEARCH_USER_AGENT:AssessWiseResearchBot/2.0 (+https://github.com/assesswise/future-designer)}
+    # Which connectors run, in priority order. Drop one to switch it off — the others carry
+    # the run. `groq-agent` is the one worth reconsidering when a run is too slow: it reaches
+    # pages the keyless connectors cannot, and it costs about two and a quarter minutes of the
+    # shared Groq ceiling per call.
+    connectors: ${RESEARCH_CONNECTORS:bing-web,google-news,bing-news,wikipedia,openalex,crossref,arxiv,europepmc,hackernews,stackexchange,groq-agent}
+    # Halve that cost without losing the connector entirely.
+    groq-agent-max-calls: ${RESEARCH_GROQ_AGENT_MAX_CALLS:2}
     # Publishers that refuse server-side requests are retried through a public reader.
     reader-fallback-enabled: ${RESEARCH_READER_FALLBACK:true}
     # Optional keyed search providers. Dormant unless a key is present.

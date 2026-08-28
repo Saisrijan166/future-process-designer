@@ -2,6 +2,7 @@ package com.assesswise.processdesigner.service.research.connector;
 
 import com.assesswise.processdesigner.domain.SourceType;
 import com.assesswise.processdesigner.service.ai.AiCompletion;
+import com.assesswise.processdesigner.config.AppProperties;
 import com.assesswise.processdesigner.service.ai.AiGateway;
 import com.assesswise.processdesigner.service.ai.AiRequest;
 import com.assesswise.processdesigner.service.ai.AiTask;
@@ -56,9 +57,11 @@ public class GroqAgentConnector implements SearchConnector {
             your summary of them.""";
 
     private final AiGateway aiGateway;
+    private final int maxCalls;
 
-    public GroqAgentConnector(AiGateway aiGateway) {
+    public GroqAgentConnector(AiGateway aiGateway, AppProperties properties) {
         this.aiGateway = aiGateway;
+        this.maxCalls = Math.max(1, properties.research().groqAgentMaxCalls());
     }
 
     @Override
@@ -82,14 +85,21 @@ public class GroqAgentConnector implements SearchConnector {
     }
 
     /**
-     * Twice per run. Measured: each call spends 10,000-17,000 tokens of the model's 70,000
-     * tokens-a-minute allowance, so a third and fourth call in the same run are refused with a 413
-     * rather than answered. Two calls on the run's two best questions is the whole of what this
-     * connector can usefully contribute.
+     * Twice per run by default. Measured two ways, and both matter.
+     *
+     * <p>Each call spends 10,000-17,000 tokens of the model's own 70,000-a-minute allowance, so a
+     * third and fourth call in the same run are refused with a 413 rather than answered.
+     *
+     * <p>And each call reserves 18,000 tokens against Groq's 8,000-per-minute organisation-wide
+     * ceiling — about two and a quarter minutes of waiting before any other stage can proceed, which
+     * no other provider can absorb because this model exists only on Groq. On a run measured at 193
+     * seconds, 170 of those were spent waiting on budget. This is the first number to turn down when
+     * a run is too slow; to remove the connector altogether, leave it out of
+     * {@code RESEARCH_CONNECTORS} and the other ten carry the run.
      */
     @Override
     public int maxInvocationsPerRun() {
-        return 2;
+        return maxCalls;
     }
 
     @Override

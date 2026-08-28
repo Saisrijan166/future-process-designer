@@ -278,6 +278,16 @@ public record AppProperties(
              */
             @DefaultValue("true") boolean readerFallbackEnabled,
             @DefaultValue("https://r.jina.ai/") String readerBaseUrl,
+            /**
+             * How many times the Groq agentic connector may run in one pass.
+             *
+             * <p>The most valuable of the eleven connectors and much the most expensive: one call
+             * reserves 18,000 tokens against Groq's 8,000-per-minute organisation-wide ceiling,
+             * roughly two and a quarter minutes of waiting that no other provider can absorb.
+             * Turn it down to 1 to halve that; drop the connector from {@code connectors} to remove
+             * it entirely.
+             */
+            @DefaultValue("2") int groqAgentMaxCalls,
             /** Optional keyed search providers. Used only when a key is present. */
             @DefaultValue KeyedSearch tavily,
             @DefaultValue KeyedSearch brave,

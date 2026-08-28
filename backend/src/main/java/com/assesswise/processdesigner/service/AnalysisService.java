@@ -306,7 +306,8 @@ public class AnalysisService {
                 notes,
                 List.of(),
                 outcome.cacheHits() == outcome.stageResults().size() && outcome.cacheHits() > 0,
-                null);
+                null,
+                outcome.throttledMs());
 
         runRecorder.recordSuccess(runId, aggregate, false, warnings, startedAt);
         runRecorder.recordStageTotals(runId, StagedAnalysisPipeline.PIPELINE_VERSION,
