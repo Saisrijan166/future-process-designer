@@ -71,6 +71,10 @@ public class AiResponseCache {
         try {
             return repository.findById(cacheKey)
                     .filter(entry -> entry.getCreatedAt().isAfter(Instant.now().minus(ttl)))
+                    // Also checked on the way in. Checked again here because a deployment inherits
+                    // whatever the previous one wrote, and a truncated entry stored before that
+                    // rule existed would otherwise keep replaying until its TTL ran out.
+                    .filter(entry -> !AiCompletion.isTruncated(entry.getFinishReason()))
                     .map(this::toCompletion);
         } catch (RuntimeException e) {
             log.warn("AI cache lookup failed ({}); continuing without it", e.getMessage());
@@ -98,9 +102,24 @@ public class AiResponseCache {
         }
     }
 
+    /**
+     * Remembers an answer, unless the provider had already stopped mid-sentence.
+     *
+     * <p>A response truncated at the output ceiling is usually unparseable, and caching one makes
+     * that permanent: every later run is handed the identical broken text instead of making a call
+     * that might fit, for as long as the entry lives. Observed in production on 29-08-2026 — one
+     * claim extraction came back {@code finishReason=length}, and the document it belonged to
+     * produced zero claims on every run afterwards, the failure replaying from the cache in
+     * milliseconds and looking exactly like a model that simply had nothing to say.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void store(String cacheKey, AiTask task, AiCompletion completion) {
         if (!enabled || completion == null || completion.text() == null || completion.text().isBlank()) {
+            return;
+        }
+        if (completion.truncated()) {
+            log.debug("Not caching a truncated {} response from {}: it would replay the truncation",
+                    task.id(), completion.model());
             return;
         }
         try {

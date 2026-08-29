@@ -88,6 +88,15 @@ public record AiCompletion(
 
     /** True when the model stopped because it hit the output token ceiling, so the text is truncated. */
     public boolean truncated() {
+        return isTruncated(finishReason);
+    }
+
+    /**
+     * The same test against a bare finish reason, for a response read back out of storage rather
+     * than off the wire. Gemini says {@code MAX_TOKENS} and the OpenAI-compatible providers say
+     * {@code length}; both mean the text stops mid-sentence.
+     */
+    public static boolean isTruncated(String finishReason) {
         return "MAX_TOKENS".equalsIgnoreCase(finishReason) || "length".equalsIgnoreCase(finishReason);
     }
 
