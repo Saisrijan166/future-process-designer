@@ -83,6 +83,53 @@ public class StagedAnalysisPipeline {
     /** One stage's identity plus its result, which is what the API reports. */
     public record StageOutcome(String stageId, String title, StageResult result) {}
 
+    /**
+     * Says so when the reviewer turned out to be the model it was reviewing.
+     *
+     * <p>The critique stage is routed to a different model family on purpose — a model asked to
+     * review its own output agrees with itself. But routing has fallbacks, and a busy or exhausted
+     * provider can land both stages on the same model without anything looking wrong. That silently
+     * turns the most important check in the pipeline into a rubber stamp, so it has to be visible.
+     *
+     * <p>Found while tuning for speed: moving the proposal stage to the faster provider caused the
+     * critique to fall back onto the same one, and nothing said a word about it.
+     */
+    private static void warnIfReviewedItself(PipelineContext context, List<StageOutcome> outcomes) {
+        StageOutcome critique = last(outcomes, "critique");
+        if (critique == null || critique.result().model() == null) {
+            return;
+        }
+        StageOutcome proposals = last(outcomes, "opportunities");
+        if (proposals == null || proposals.result().model() == null) {
+            return;
+        }
+        if (family(critique.result().model()).equals(family(proposals.result().model()))) {
+            context.addWarning(
+                    ("The adversarial review ran on %s, the same model family that wrote the "
+                            + "recommendations. A model reviewing its own output agrees with itself, so "
+                            + "treat this run's reviewer agreement as weak evidence.")
+                            .formatted(critique.result().model()));
+        }
+    }
+
+    private static StageOutcome last(List<StageOutcome> outcomes, String stageId) {
+        for (int index = outcomes.size() - 1; index >= 0; index--) {
+            if (outcomes.get(index).stageId().equals(stageId)) {
+                return outcomes.get(index);
+            }
+        }
+        return null;
+    }
+
+    /** "gemini-3.1-flash-lite" and "gemini-2.0-pro" are one family; so are the two gpt-oss sizes. */
+    private static String family(String model) {
+        String lower = model.toLowerCase(java.util.Locale.ROOT);
+        int slash = lower.indexOf('/');
+        String tail = slash >= 0 ? lower.substring(slash + 1) : lower;
+        int dash = tail.indexOf('-');
+        return dash > 0 ? tail.substring(0, dash) : tail;
+    }
+
     public PipelineOutcome run(PipelineContext context) {
         Instant runStartedAt = Instant.now();
         long throttledAtStart = governor.totalThrottledMillis();
@@ -110,6 +157,7 @@ public class StagedAnalysisPipeline {
 
             StageResult result = stage.execute(context);
             outcomes.add(new StageOutcome(stage.id(), stage.title(), result));
+            warnIfReviewedItself(context, outcomes);
 
             if (result.promptTokens() != null) {
                 promptTokens += result.promptTokens();
