@@ -2,6 +2,8 @@ package com.assesswise.processdesigner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.assesswise.processdesigner.config.StaleRunReconciler;
+import com.assesswise.processdesigner.domain.AnalysisRun;
 import com.assesswise.processdesigner.domain.AnalysisRunStatus;
 import com.assesswise.processdesigner.domain.AutomationPotential;
 import com.assesswise.processdesigner.domain.ProblemSource;
@@ -17,6 +19,7 @@ import com.assesswise.processdesigner.dto.ProcessSummaryDto;
 import com.assesswise.processdesigner.exception.AiProviderException;
 import com.assesswise.processdesigner.support.AbstractIntegrationTest;
 import com.assesswise.processdesigner.support.AuthenticatedClient;
+import com.assesswise.processdesigner.repository.AnalysisRunRepository;
 import com.assesswise.processdesigner.support.StubAiProvider;
 import java.time.Duration;
 import java.util.List;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -50,6 +54,12 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private AnalysisRunRepository runRepository;
+
+    @Autowired
+    private StaleRunReconciler reconciler;
 
     private AuthenticatedClient client;
 
@@ -234,6 +244,45 @@ class AnalysisPipelineIntegrationTest extends AbstractIntegrationTest {
         assertThat(items.stream().map(ProcessSummaryDto::lastAnalyzedAt).toList())
                 .as("every process with a date comes before every process without one")
                 .containsSubsequence(items.get(0).lastAnalyzedAt(), null);
+    }
+
+    @Test
+    @DisplayName("a run orphaned by a restart is closed out, not left blocking the process forever")
+    void reconcilesRunsOrphanedByARestart() {
+        // A run that was RUNNING when the JVM died. On Render this is routine — every deploy is a
+        // restart — and before the reconciler existed the row stayed RUNNING for good, so the
+        // process showed a permanent "analysing now" and its button never came back.
+        aiProvider.respondWith(validModelResponse());
+        UUID processId = createProcess("Orphaned Run " + UUID.randomUUID());
+        assertThat(analyze(processId).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        UUID runId = runRepository.findFirstByProcessIdOrderByStartedAtDesc(processId).orElseThrow().getId();
+        forceRunning(runId);
+
+        assertThat(client.get("/api/processes/" + processId + "/analysis-runs/active", String.class)
+                        .getStatusCode())
+                .as("the stuck run is visible as active, which is the problem")
+                .isEqualTo(HttpStatus.OK);
+
+        reconciler.reconcile();
+
+        assertThat(client.get("/api/processes/" + processId + "/analysis-runs/active", String.class)
+                        .getStatusCode())
+                .as("and after a restart it is not")
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(runRepository.findById(runId).orElseThrow().getStatus())
+                .isEqualTo(AnalysisRunStatus.FAILED);
+        assertThat(runRepository.findById(runId).orElseThrow().getErrorMessage())
+                .contains("restarted");
+    }
+
+    /** Puts a finished run back into the state a killed JVM would have left it in. */
+    @Transactional
+    void forceRunning(UUID runId) {
+        AnalysisRun run = runRepository.findById(runId).orElseThrow();
+        run.setStatus(AnalysisRunStatus.RUNNING);
+        run.setFinishedAt(null);
+        runRepository.save(run);
     }
 
     @Test

@@ -20,7 +20,14 @@ import java.util.stream.Stream;
 public enum AiTask {
 
     /** Turns a process into the handful of search queries worth running. Small in, small out. */
-    QUERY_PLANNING("query-planning", 900, 0.3),
+    /**
+     * Raised from 900 after watching it truncate. A verbose model hit the ceiling exactly, came back
+     * with finishReason=length and therefore unparseable JSON, and the planner fell through to its
+     * deterministic template — which is why one production run searched for "Higher Education
+     * Student Admissions Screening standard operating practice" and got a Creed music video. One
+     * call per run, so the extra headroom is cheap and every later search depends on it.
+     */
+    QUERY_PLANNING("query-planning", 1400, 0.3),
 
     /** Reads the current state and names the real problems and their root causes. */
     DIAGNOSIS("diagnosis", 3000, 0.2),

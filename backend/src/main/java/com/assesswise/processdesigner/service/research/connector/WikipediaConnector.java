@@ -31,7 +31,11 @@ public class WikipediaConnector implements SearchConnector {
     private static final Logger log = LoggerFactory.getLogger(WikipediaConnector.class);
     private static final String ENDPOINT =
             "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=%s"
-                    + "&format=json&srlimit=%d&srprop=snippet|timestamp|wordcount";
+                    // %7C, not a literal "|": java.net.URI rejects a bare pipe in a query string,
+                    // so every Wikipedia search failed with "Illegal character in query at index N"
+                    // before the request was even sent. It failed quietly — the connector is allowed
+                    // to return nothing and the other ten carried the run — which is why it survived.
+                    + "&format=json&srlimit=%d&srprop=snippet%%7Ctimestamp%%7Cwordcount";
 
     private final HttpResearchClient httpClient;
     private final ObjectMapper objectMapper;

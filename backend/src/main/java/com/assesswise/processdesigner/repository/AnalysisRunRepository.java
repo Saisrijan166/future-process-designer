@@ -28,6 +28,9 @@ public interface AnalysisRunRepository extends JpaRepository<AnalysisRun, UUID> 
      * <p>One small indexed query for the whole dashboard, rather than a join bolted onto the
      * listing's grouped projection where it would risk the paging counts.
      */
+    /** Runs in a given state — used at startup to close out ones a restart orphaned. */
+    List<AnalysisRun> findByStatus(AnalysisRunStatus status);
+
     @Query("select distinct r.process.id from AnalysisRun r where r.status = :status")
     List<UUID> findProcessIdsByStatus(@Param("status") AnalysisRunStatus status);
 }
