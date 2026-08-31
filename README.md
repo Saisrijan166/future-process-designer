@@ -34,7 +34,7 @@ and every response is readable in the running application.
 **Live URLs**
 
 - Frontend: <https://future-process-designer.vercel.app>
-- Backend: <https://ai-future-process-designer-api.onrender.com> · API docs at `/swagger-ui.html`
+- Backend: <https://future-process-designer.onrender.com> · API docs at `/swagger-ui.html`
 
 > The backend sleeps after 15 minutes idle on Render's free plan and takes about a minute to wake.
 > Open the frontend and give it a moment before judging it unresponsive.
